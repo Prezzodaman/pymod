@@ -4,6 +4,13 @@ import time
 import pyaudio
 import random
 
+# TODO: Make this object-oriented (instead of in a While loop)
+
+# 1.0.1:
+# 	Partially fixed an offset issue with Ode2ptk.mod when rendering individual channels
+#   Kept the volume identical when rendering individual channels
+#   Fixed an issue when using the --channels/-c option and not rendering, causing the module to play indefinitely
+
 # https://modarchive.org/forums/index.php?topic=2709.0
 def mod_get_tempo_length(tempo):
 	return (2500/mod_tempo)*(sample_rate/1000)
@@ -144,7 +151,7 @@ parser.add_argument("play_mode", type=str,help="Selects a different play mode: "
 parser.add_argument("-r", "--render", type=argparse.FileType("w"), help="Renders the module to a wave file. If rendering multiple channels, end the filename with _1 (e.g. pymod_1.wav) and the files will be numbered sequentially")
 parser.add_argument("-l", "--loops", type=int, help="The amount of times to loop the module")
 parser.add_argument("-v", "--verbose", action="store_true", help="If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.")
-parser.add_argument("-c", "--channels", action="store_true", help="Renders each channel to its own file. If playing, this does nothing.")
+parser.add_argument("-c", "--channels", action="store_true", help="Renders each channel to its own file. If playing, this does nothing. The channel volume is reduced, so the result is identical when all channels are mixed together.")
 parser.add_argument("-b", "--buffer", type=int, default=1024, help="Change the buffer size for realtime playback (default is 1024)")
 
 args=parser.parse_args()
@@ -162,8 +169,8 @@ if loops==None:
 else:
 	loops+=1
 
-print("Pymod v1.0.0")
-print("by Presley Peters, 2023")
+print("Pymod v1.0.1")
+print("by Presley Peters, 2023-2024")
 print()
 
 with open(input_file,"rb") as file:
@@ -209,6 +216,8 @@ elif buffer_size<0 or buffer_size>8192:
 	print("Error: Buffer size must be between 0 and 8192!")
 elif render_file and render_channels and not render_file.name.endswith("_1.wav"):
 	print("Error: File name is suffixed incorrectly for channel rendering!")
+elif not render_file and render_channels:
+	print("Error: The --channels/-c option can only be used alongside the --render/-r option!")
 else:
 	stereo=play_mode.startswith("stereo")
 	mod_lines=64
@@ -264,8 +273,6 @@ else:
 		if order>mod_pattern_amount:
 			mod_pattern_amount=order
 		mod_pointer+=1
-	mod_jumps=[[0,0]]
-	mod_orders_visited=[]
 	mod_pointer+=4
 	mod_pattern_amount+=1
 
@@ -330,6 +337,8 @@ else:
 		channel_bytes=[]
 		while_condition=True
 		while while_condition:
+			mod_jumps=[[0,0]]
+			mod_orders_visited=[]
 			# these are here, because when rendering channels, they need to be reset every time
 			mod_filter=play_mode.endswith("filter") # a <crude> "simulation" of the amiga hardware filter (it's a simple one pole low-pass filter - literally just finding the difference between the current and last sum)
 			mod_filter_flag=mod_filter # unlike mod_filter, this can't be changed
@@ -900,6 +909,8 @@ else:
 									volume=0
 								volume/=64
 								sample_byte*=volume
+								if render_file and render_channels and channel==channel_current:
+									sample_byte/=mod_channels_adjusted
 								sample_byte=int((sample_byte*32768)+32768)
 								if render_file and render_channels and channel==channel_current:
 									sample_byte_channel=sample_byte
