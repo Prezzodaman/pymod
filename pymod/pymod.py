@@ -19,7 +19,7 @@ from .__about__ import __version__
 
 # -- Classes
 class pymod:
-	"""Python program that plays/renders ProTracker modules using PyAudio."""
+	"""Python class that plays/renders ProTracker modules using PyAudio."""
 
 	# -- Class Variables
 	mod_periods=[
@@ -119,6 +119,8 @@ class pymod:
 
 	play_modes=["mono","stereo_soft","stereo_hard"]
 
+	buffer_size_default=1024
+
 	# -- Class Methods
 	@classmethod
 	def mod_get_frequency(cls,period):
@@ -152,10 +154,6 @@ class pymod:
 	def get_panned_bytes(cls,byte,pan): # expects an unsigned byte between 0 and 65535. pan value is between -1 and 1 (left and right)
 		return int((byte-32768)*((pan/2)-0.5)),0-int(((byte-32768)*((pan/2)+0.5)))
 
-	@classmethod
-	def shutdown(cls):
-		return
-
 	# -- Instance Methods
 	def __init__(self):
 		"""Constructor based on command line arguments."""
@@ -168,6 +166,25 @@ class pymod:
 
 		pymod.play_modes.extend(["info","text"])
 
+		self.mod_tempo=125
+		self.mod_ticks=6
+
+		self.input_file=None
+		self.sample_rate=44100
+		self.render_file=None
+		self.loops=False
+		self.render_channels=False
+		self.play_mode="mono"
+
+		self.verbose=False
+		self.buffer_size=pymod.buffer_size_default
+
+	def shutdown(self):
+		return
+
+	def parse_args(self):
+		"""Constructor based on command line arguments."""
+
 		self.parser=argparse.ArgumentParser(description="Plays a .mod file")
 		self.parser.add_argument("input_file", type=argparse.FileType("r"),help="The name of the module")
 		self.parser.add_argument("sample_rate", type=int,help="Sample rate for playback/rendering")
@@ -176,7 +193,7 @@ class pymod:
 		self.parser.add_argument("-l", "--loops", type=int, help="The amount of times to loop the module")
 		self.parser.add_argument("-v", "--verbose", action="store_true", help="If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.")
 		self.parser.add_argument("-c", "--channels", action="store_true", help="Renders each channel to its own file. If playing, this does nothing. The channel volume is reduced, so the result is identical when all channels are mixed together.")
-		self.parser.add_argument("-b", "--buffer", type=int, default=1024, help="Change the buffer size for realtime playback (default is 1024)")
+		self.parser.add_argument("-b", "--buffer", type=int, default=pymod.buffer_size_default, help="Change the buffer size for realtime playback (default is 1024)")
 
 		self.args=self.parser.parse_args()
 		self.input_file=self.args.input_file.name
@@ -188,19 +205,20 @@ class pymod:
 
 		self.verbose=self.args.verbose
 		self.buffer_size=self.args.buffer
-		if self.loops==None:
-			self.loops=1
-		else:
-			self.loops+=1
-
-		self.mod_tempo=125
-		self.mod_ticks=6
 
 	# https://modarchive.org/forums/index.php?topic=2709.0
 	def mod_get_tempo_length(self):
 		return (2500/self.mod_tempo)*(self.sample_rate/1000)
 
-	def main(self):
+	def run(self):
+		if self.input_file is None:
+			print("Error: Missing module filename!")
+
+		if self.loops==None:
+			self.loops=1
+		else:
+			self.loops+=1
+
 		print(f"Pymod v{__version__}")
 		print("by Presley Peters, 2023-present")
 		print()
@@ -598,7 +616,7 @@ class pymod:
 											mod_invert_loop_speed[channel]=0
 										else:
 											mod_invert_loop_counter[channel]=0
-											mod_invert_loop_speed[channel]=mod_funk_table[param]
+											mod_invert_loop_speed[channel]=pymod.mod_funk_table[param]
 									if effect==0xe: # pattern delay:
 										mod_pattern_delay=param
 									wave_type=param%4

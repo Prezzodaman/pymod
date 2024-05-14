@@ -4,4 +4,6 @@
 # This file is part of pymod.
 #
 
+from .pymod import pymod
+
 __all__ = []
