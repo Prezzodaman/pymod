@@ -22,7 +22,7 @@ class pymod:
 	"""Python class that plays/renders ProTracker modules using PyAudio."""
 
 	# -- Class Variables
-	mod_periods=[
+	_mod_periods=[
 		[ # no finetune
 			856,808,762,720,678,640,604,570,538,508,480,453,
 			428,404,381,360,339,320,302,285,269,254,240,226,
@@ -105,128 +105,150 @@ class pymod:
 		]
 	]
 
-	mod_sine_table=[
+	_mod_sine_table=[
 		0,24,49,74,97,120,141,161,
 		180,197,212,224,235,244,250,253,
 		255,253,250,244,235,224,212,197,
 		180,161,141,120,97,74,49,24
 	]
 
-	mod_funk_table=[ # this sounds like something i made up, but it's actually called the funk table :D
+	_mod_funk_table=[ # this sounds like something i made up, but it's actually called the funk table :D
 		0,5,6,7,8,10,11,13,16,
 		19,22,26,32,43,64,128
 	]
 
-	play_modes=["mono","stereo_soft","stereo_hard"]
+	_play_modes=["mono","stereo_soft","stereo_hard"]
 
-	buffer_size_default=1024
+	_buffer_size_default=1024
 
 	# -- Class Methods
 	@classmethod
-	def mod_get_frequency(cls,period):
+	def _mod_get_frequency(cls,period):
 		if period>0:
 			return 7093789/(period*2)
 		else:
 			return 0
 
 	@classmethod
-	def mod_get_period_note(cls,period): # returns the note value
+	def _mod_get_period_note(cls,period): # returns the note value
 		note=-1
 		found=False
-		for period_set in pymod.mod_periods:
+		for period_set in pymod._mod_periods:
 			if period in period_set and not found:
 				note=period_set.index(period)
 				found=True
 		return note
 
 	@classmethod
-	def mod_get_finetune_period(cls,period,finetune):
-		return pymod.mod_periods[finetune][pymod.mod_get_period_note(period)]
+	def _mod_get_finetune_period(cls,period,finetune):
+		return pymod._mod_periods[finetune][pymod._mod_get_period_note(period)]
 
 	@classmethod
-	def mod_get_closest_period(cls,period,finetune):
+	def _mod_get_closest_period(cls,period,finetune):
 		differences=[]
-		for period_2 in pymod.mod_periods[finetune]:
+		for period_2 in pymod._mod_periods[finetune]:
 			differences.append(abs(period-period_2))
-		return pymod.mod_periods[finetune][differences.index(min(differences))]
+		return pymod._mod_periods[finetune][differences.index(min(differences))]
 
 	@classmethod
-	def get_panned_bytes(cls,byte,pan): # expects an unsigned byte between 0 and 65535. pan value is between -1 and 1 (left and right)
+	def _get_panned_bytes(cls,byte,pan): # expects an unsigned byte between 0 and 65535. pan value is between -1 and 1 (left and right)
 		return int((byte-32768)*((pan/2)-0.5)),0-int(((byte-32768)*((pan/2)+0.5)))
 
 	# -- Instance Methods
 	def __init__(self):
 		"""Constructor based on command line arguments."""
 
-		for a in range(0,len(pymod.mod_sine_table)): # the protracker sine table is only half a wave, so we're completing it here
-			pymod.mod_sine_table.append(0-pymod.mod_sine_table[a])
+		for a in range(0,len(pymod._mod_sine_table)): # the protracker sine table is only half a wave, so we're completing it here
+			pymod._mod_sine_table.append(0-pymod._mod_sine_table[a])
 
-		for a in range(0,len(pymod.play_modes)):
-			pymod.play_modes.append(pymod.play_modes[a]+"_filter")
+		for a in range(0,len(pymod._play_modes)):
+			pymod._play_modes.append(pymod._play_modes[a]+"_filter")
 
-		pymod.play_modes.extend(["info","text"])
+		pymod._play_modes.extend(["info","text"])
 
-		self.mod_tempo=125
-		self.mod_ticks=6
+		self._mod_tempo=125
+		self._mod_ticks=6
 
-		self.input_file=None
-		self.sample_rate=44100
-		self.render_file=None
-		self.loops=False
-		self.render_channels=False
-		self.play_mode="mono"
+		self._input_file=None
+		self._sample_rate=44100
+		self._render_file=None
+		self._loops=False
+		self._render_channels=False
+		self._play_mode="mono"
+		self._verbose=False
+		self._buffer_size=pymod._buffer_size_default
 
-		self.verbose=False
-		self.buffer_size=pymod.buffer_size_default
+	def set_input_file(self,filepath):
+		self._input_file=filepath
+
+	def set_sample_rate(self,rate):
+		self._sample_rate=rate
+
+	def set_render_file(self,filepath):
+		self._render_file=filepath
+
+	def set_nb_of_loops(self,nb_of_loops):
+		self._loops=nb_of_loops
+
+	def set_render_channels(self,flag):
+		self._render_channels=flag
+
+	def set_play_mode(self,play_mode):
+		self._play_mode=play_mode
+
+	def set_verbose(self,flag):
+		self._verbose=flag
+
+	def set_buffer_size(self,size):
+		self._buffer_size=size
 
 	def shutdown(self):
 		return
 
+	# https://modarchive.org/forums/index.php?topic=2709.0
+	def _mod_get_tempo_length(self):
+		return (2500/self._mod_tempo)*(self._sample_rate/1000)
+
 	def parse_args(self):
 		"""Constructor based on command line arguments."""
 
-		self.parser=argparse.ArgumentParser(description="Plays a .mod file")
-		self.parser.add_argument("input_file", type=argparse.FileType("r"),help="The name of the module")
-		self.parser.add_argument("sample_rate", type=int,help="Sample rate for playback/rendering")
-		self.parser.add_argument("play_mode", type=str,help="Selects a different play mode: " + ", ".join(pymod.play_modes))
-		self.parser.add_argument("-r", "--render", type=argparse.FileType("w"), help="Renders the module to a wave file. If rendering multiple channels, end the filename with _1 (e.g. pymod_1.wav) and the files will be numbered sequentially")
-		self.parser.add_argument("-l", "--loops", type=int, help="The amount of times to loop the module")
-		self.parser.add_argument("-v", "--verbose", action="store_true", help="If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.")
-		self.parser.add_argument("-c", "--channels", action="store_true", help="Renders each channel to its own file. If playing, this does nothing. The channel volume is reduced, so the result is identical when all channels are mixed together.")
-		self.parser.add_argument("-b", "--buffer", type=int, default=pymod.buffer_size_default, help="Change the buffer size for realtime playback (default is 1024)")
+		parser=argparse.ArgumentParser(description="Plays a .mod file")
+		parser.add_argument("input_file", type=argparse.FileType("r"),help="The name of the module")
+		parser.add_argument("sample_rate", type=int,help="Sample rate for playback/rendering")
+		parser.add_argument("play_mode", type=str,help="Selects a different play mode: " + ", ".join(pymod._play_modes))
+		parser.add_argument("-r", "--render", type=argparse.FileType("w"), help="Renders the module to a wave file. If rendering multiple channels, end the filename with _1 (e.g. pymod_1.wav) and the files will be numbered sequentially")
+		parser.add_argument("-l", "--loops", type=int, help="The amount of times to loop the module")
+		parser.add_argument("-v", "--verbose", action="store_true", help="If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.")
+		parser.add_argument("-c", "--channels", action="store_true", help="Renders each channel to its own file. If playing, this does nothing. The channel volume is reduced, so the result is identical when all channels are mixed together.")
+		parser.add_argument("-b", "--buffer", type=int, default=pymod._buffer_size_default, help="Change the buffer size for realtime playback (default is 1024)")
 
-		self.args=self.parser.parse_args()
-		self.input_file=self.args.input_file.name
-		self.sample_rate=self.args.sample_rate
-		self.render_file=self.args.render
-		self.loops=self.args.loops
-		self.render_channels=self.args.channels
-		self.play_mode=self.args.play_mode.lower()
-
-		self.verbose=self.args.verbose
-		self.buffer_size=self.args.buffer
-
-	# https://modarchive.org/forums/index.php?topic=2709.0
-	def mod_get_tempo_length(self):
-		return (2500/self.mod_tempo)*(self.sample_rate/1000)
+		args=parser.parse_args()
+		self.set_input_file(args.input_file.name)
+		self.set_sample_rate(args.sample_rate)
+		self.set_render_file(args.render)
+		self.set_nb_of_loops(args.loops)
+		self.set_render_channels(args.channels)
+		self.set_play_mode(args.play_mode.lower())
+		self.set_verbose(args.verbose)
+		self.set_buffer_size(args.buffer)
 
 	def run(self):
-		if self.input_file is None:
+		if self._input_file is None:
 			print("Error: Missing module filename!")
 
-		if self.loops==None:
-			self.loops=1
+		if self._loops==None:
+			self._loops=1
 		else:
-			self.loops+=1
+			self._loops+=1
 
 		print(f"Pymod v{__version__}")
 		print("by Presley Peters, 2023-present")
 		print()
 
-		with open(self.input_file,"rb") as file:
+		with open(self._input_file,"rb") as file:
 			mod_file=bytearray(file.read()) # we're converting to a bytearray so the "invert loop" effect works (byte objects are immutable)
 
-		mod_ms_per_tick=self.mod_get_tempo_length()
+		mod_ms_per_tick=self._mod_get_tempo_length()
 		mod_ticks_counter=0
 
 		mod_channels=0
@@ -256,18 +278,18 @@ class pymod:
 
 		if mod_channels==0:
 			print("Error: Invalid module!")
-		elif self.sample_rate<1000 or self.sample_rate>380000:
+		elif self._sample_rate<1000 or self._sample_rate>380000:
 			print("Error: Sample rate must be between 1000 and 380000!")
-		elif not self.play_mode in pymod.play_modes:
-			print("Error: Invalid play mode: " + self.play_mode + ". Accepted modes: " + ", ".join(pymod.play_modes))
-		elif self.buffer_size<0 or self.buffer_size>8192:
+		elif not self._play_mode in pymod._play_modes:
+			print("Error: Invalid play mode: " + self._play_mode + ". Accepted modes: " + ", ".join(pymod._play_modes))
+		elif self._buffer_size<0 or self._buffer_size>8192:
 			print("Error: Buffer size must be between 0 and 8192!")
-		elif self.render_file and self.render_channels and not self.render_file.name.endswith("_1.wav"):
+		elif self._render_file and self._render_channels and not self._render_file.name.endswith("_1.wav"):
 			print("Error: File name is suffixed incorrectly for channel rendering!")
-		elif not self.render_file and self.render_channels:
+		elif not self._render_file and self._render_channels:
 			print("Error: The --channels/-c option can only be used alongside the --render/-r option!")
 		else:
-			stereo=self.play_mode.startswith("stereo")
+			stereo=self._play_mode.startswith("stereo")
 			mod_lines=64
 
 			mod_name=""
@@ -333,7 +355,7 @@ class pymod:
 				mod_samples[a].update({"offset":mod_pointer})
 				mod_pointer+=mod_samples[a]["length"]
 
-			if self.play_mode=="info":
+			if self._play_mode=="info":
 				print("Module:")
 				print("\tName: " + mod_name)
 				print("\tPatterns: " + str(mod_pattern_amount))
@@ -354,7 +376,7 @@ class pymod:
 						finetune=finetune-16
 					print("\t" + str(sample[0]+1).rjust(2," ") + ". " + sample[1]["name"])
 					print("\t       Length: " + str(sample[1]["length"]) + ", " + looping_string + ", Finetune: " + str(finetune) + ", Volume: " + str(sample[1]["volume"]))
-			elif self.play_mode=="text":
+			elif self._play_mode=="text":
 				print("Module text:")
 				print()
 				for sample in mod_samples:
@@ -362,19 +384,19 @@ class pymod:
 			else:
 				mod_note_names=[]
 				mod_note_letters=["C-","C#","D-","D#","E-","F-","F#","G-","G#","A-","A#","B-"]
-				for a in range(0,len(pymod.mod_periods[0])):
+				for a in range(0,len(pymod._mod_periods[0])):
 					mod_note_names.append(mod_note_letters[a%len(mod_note_letters)]+str((a//12)+4))
 
 				file_finished=[]
 
-				if self.render_file==None:
+				if self._render_file==None:
 					pya=pyaudio.PyAudio()
 					channels=1
 					if stereo:
 						channels+=1
-					stream=pya.open(format=pyaudio.paInt16,rate=self.sample_rate,output=True,channels=channels,frames_per_buffer=self.buffer_size)
+					stream=pya.open(format=pyaudio.paInt16,rate=self._sample_rate,output=True,channels=channels,frames_per_buffer=self._buffer_size)
 
-				if not self.render_file and not self.verbose:
+				if not self._render_file and not self._verbose:
 					print("Playing...")
 
 				start_time=time.perf_counter()
@@ -388,14 +410,14 @@ class pymod:
 					mod_jumps=[[0,0]]
 					mod_orders_visited=[]
 					# these are here, because when rendering channels, they need to be reset every time
-					mod_filter=self.play_mode.endswith("filter") # a <crude> "simulation" of the amiga hardware filter (it's a simple one pole low-pass filter - literally just finding the difference between the current and last sum)
+					mod_filter=self._play_mode.endswith("filter") # a <crude> "simulation" of the amiga hardware filter (it's a simple one pole low-pass filter - literally just finding the difference between the current and last sum)
 					mod_filter_flag=mod_filter # unlike mod_filter, this can't be changed
-					mod_period_amount=len(pymod.mod_periods[0])
+					mod_period_amount=len(pymod._mod_periods[0])
 
 					mod_channel_byte=[32768]*mod_channels_adjusted # the current (unsigned) byte in each channel, summed together later on
 					mod_channel_pan=[0]*mod_channels_adjusted # -1 = left, 0 = centre, 1 = right
 					for a in range(0,mod_channels):
-						if self.play_mode.startswith("stereo_soft"):
+						if self._play_mode.startswith("stereo_soft"):
 							if a%4==1 or a%4==2:
 								mod_channel_pan[a]=0.5
 							else:
@@ -474,7 +496,7 @@ class pymod:
 					sample_byte_channel=32768
 					sample_byte_last=32768
 
-					if self.render_channels:
+					if self._render_channels:
 						while_condition=channel_current<mod_channels-1
 					else:
 						while_condition=False
@@ -488,18 +510,18 @@ class pymod:
 
 							pattern_string=""
 							loop_string=""
-							if self.loops>1 or self.render_channels:
+							if self._loops>1 or self._render_channels:
 								loop_string=" ("
-							if self.loops>1:
-								loop_string+="loop " + str(mod_loops+1) + "/" + str(self.loops)
-								if self.render_channels:
+							if self._loops>1:
+								loop_string+="loop " + str(mod_loops+1) + "/" + str(self._loops)
+								if self._render_channels:
 									loop_string+=", "
-							if self.render_channels:
+							if self._render_channels:
 								loop_string+="channel " + str(channel_current+1)
-							if self.loops>1 or self.render_channels:
+							if self._loops>1 or self._render_channels:
 								loop_string+=")"
-							if self.render_file:
-								if self.verbose:
+							if self._render_file:
+								if self._verbose:
 									rendering_string="Rendering: Order " + str(mod_order_position) + "/" + str(mod_song_length-1) + ", Pattern " + str(mod_order[mod_order_position]) + ", Line " + str(mod_line+1) + loop_string + "   "
 								else:
 									rendering_string="Rendering order " + str(mod_order_position) + "/" + str(mod_song_length-1) + "...   "
@@ -511,10 +533,10 @@ class pymod:
 									effect_param=mod_file[mod_pointer+3]
 									if effect_number==0xf: # set tempo/ticks (checked for all channels for the note delay - fixes the weird behaviour in ode2ptk - hey, that rhymes)
 										if effect_param<32:
-											self.mod_ticks=effect_param
+											self._mod_ticks=effect_param
 										else:
-											self.mod_tempo=effect_param
-											mod_ms_per_tick=self.mod_get_tempo_length()
+											self._mod_tempo=effect_param
+											mod_ms_per_tick=self._mod_get_tempo_length()
 								mod_pointer+=4
 							mod_pointer-=4*mod_channels
 
@@ -555,7 +577,7 @@ class pymod:
 									if period>0:
 										if mod_tone_period[channel]>0:
 											mod_tone_sliding[channel]=True
-										mod_tone_period[channel]=pymod.mod_get_finetune_period(period,mod_finetune_temp[channel])
+										mod_tone_period[channel]=pymod._mod_get_finetune_period(period,mod_finetune_temp[channel])
 									if mod_effect_param[channel]>0:
 										mod_tone_memory[channel]=mod_effect_param[channel]
 
@@ -564,9 +586,9 @@ class pymod:
 								if sample_number>0: # finetune check...
 									mod_finetune_temp[channel]=mod_samples[sample_number-1]["finetune"]
 
-									mod_ticks_per_beat=self.mod_ticks*4 # formula taken from the openmpt source code! (sndfile.cpp)
+									mod_ticks_per_beat=self._mod_ticks*4 # formula taken from the openmpt source code! (sndfile.cpp)
 									mod_samples_per_beat=mod_ms_per_tick*mod_ticks_per_beat
-									mod_bpm=(self.sample_rate/mod_samples_per_beat)*60
+									mod_bpm=(self._sample_rate/mod_samples_per_beat)*60
 
 								# extended effects are here because the note delay is checked before the sample plays
 								# also the effect numbers are out of order, because that's the order i programmed them in :D
@@ -580,7 +602,7 @@ class pymod:
 											mod_note_cut_ticks[channel]=param
 									mod_note_delay_ticks[channel]=-1 # no note delay effect, reset it
 									if effect==0xd: # note delay
-										if param>=self.mod_ticks-1: # if the delay amount is the same as the ticks per line, the note is ignored
+										if param>=self._mod_ticks-1: # if the delay amount is the same as the ticks per line, the note is ignored
 											mod_note_delay_ticks[channel]=-1
 										else:
 											mod_note_delay_ticks[channel]=param
@@ -616,7 +638,7 @@ class pymod:
 											mod_invert_loop_speed[channel]=0
 										else:
 											mod_invert_loop_counter[channel]=0
-											mod_invert_loop_speed[channel]=pymod.mod_funk_table[param]
+											mod_invert_loop_speed[channel]=pymod.__mod_funk_table[param]
 									if effect==0xe: # pattern delay:
 										mod_pattern_delay=param
 									wave_type=param%4
@@ -661,39 +683,39 @@ class pymod:
 											mod_sample_playing[channel]=True
 											mod_sample_position[channel]=0
 								if mod_effect_number[channel]!=0x3 and period>0: # if there's a slide before a period, this changes it before the slide so it slides to the correct period (slideperiodslideslideperiod)
-									mod_tone_period[channel]=pymod.mod_get_finetune_period(period,mod_finetune_temp[channel])
+									mod_tone_period[channel]=pymod._mod_get_finetune_period(period,mod_finetune_temp[channel])
 								if mod_tone_period[channel]==0 and period>0: # nothing to slide from, use the current period
 									mod_tone_period[channel]=period
 								if period>0 and not mod_tone_sliding[channel] and mod_pattern_delay_finished: # the period>0 fixes a bug related to pattern delays, if there's a period on the last channel, the period value will contain that, so without the check all channels will have the same period!
-									mod_period[channel]=pymod.mod_get_finetune_period(period,mod_finetune_temp[channel])
+									mod_period[channel]=pymod._mod_get_finetune_period(period,mod_finetune_temp[channel])
 									mod_arp_period[channel]=period # are you kidding me, that's all i had to do the entire time, i was faffing around and turns out i was trying to find the finetuned period of a finetuned period, SSCCHHHHEEEEE
 								if mod_sample_volume[channel]>64:
 									mod_sample_volume[channel]=64
 
 								if mod_effect_number[channel]==0x0: # arpeggio
 									if mod_effect_param[channel]>0: # 0 means ignore
-										period_note=pymod.mod_get_period_note(mod_arp_period[channel])
+										period_note=pymod._mod_get_period_note(mod_arp_period[channel])
 										if sample_number>0:
 											sample_finetune=0
 
 										if mod_effect_param[channel]>>4==0:
-											mod_arp_periods[channel][1]=pymod.mod_periods[sample_finetune][period_note]
+											mod_arp_periods[channel][1]=pymod._mod_periods[sample_finetune][period_note]
 										else:
 											period_1=(period_note+(mod_effect_param[channel]>>4))%(mod_period_amount+1)
 											if period_1>mod_period_amount-1:
 												mod_arp_periods[channel][1]=0
 											else:
-												mod_arp_periods[channel][1]=pymod.mod_periods[sample_finetune][period_1]
+												mod_arp_periods[channel][1]=pymod._mod_periods[sample_finetune][period_1]
 
 										if mod_effect_param[channel] & 0xf==0:
-											mod_arp_periods[channel][2]=pymod.mod_periods[sample_finetune][period_note]
+											mod_arp_periods[channel][2]=pymod._mod_periods[sample_finetune][period_note]
 										else:
 											period_2=(period_note+(mod_effect_param[channel] & 0xf))%(mod_period_amount+1)
 											if period_2>mod_period_amount-1:
 												mod_arp_periods[channel][2]=0
 											else:
-												mod_arp_periods[channel][2]=pymod.mod_periods[sample_finetune][period_2]
-										mod_arp_periods[channel][0]=pymod.mod_periods[sample_finetune][period_note]
+												mod_arp_periods[channel][2]=pymod._mod_periods[sample_finetune][period_2]
+										mod_arp_periods[channel][0]=pymod._mod_periods[sample_finetune][period_note]
 									else:
 										mod_arp_periods[channel][0]=0
 										mod_arp_periods[channel][1]=0
@@ -789,34 +811,34 @@ class pymod:
 
 								if mod_arp_periods[channel]!=[0,0,0]:
 									for a in range(0,3):
-										if mod_arp_periods[channel][a]>0: # if the period is 0, it'll be missed entirely (in mod_get_frequency)
-											mod_arp_periods[channel][a]=pymod.mod_get_finetune_period(mod_arp_periods[channel][a],mod_finetune_temp[channel])
+										if mod_arp_periods[channel][a]>0: # if the period is 0, it'll be missed entirely (in _mod_get_frequency)
+											mod_arp_periods[channel][a]=pymod._mod_get_finetune_period(mod_arp_periods[channel][a],mod_finetune_temp[channel])
 
-								if self.render_file==None:
-									if self.verbose:
+								if self._render_file==None:
+									if self._verbose:
 										note_name="---"
-										note_number=pymod.mod_get_period_note(mod_raw_period[channel])
+										note_number=pymod._mod_get_period_note(mod_raw_period[channel])
 										if note_number>=0:
 											note_name=mod_note_names[note_number]
 										pattern_string+=note_name+" "+str(sample_number).zfill(2)+" "+hex(mod_effect_number[channel])[2:].upper()+" "+hex(mod_effect_param[channel])[2:].upper().zfill(2)+"|"
 							# channels finished
 
-							if self.render_file==None:
-								if self.verbose:
+							if self._render_file==None:
+								if self._verbose:
 									print("O"+str(mod_order_position).zfill(3)+"/"+str(mod_song_length-1).zfill(3)+",P"+str(mod_order[mod_order_position]).zfill(3)+",L"+str(mod_line).zfill(2)+":|"+pattern_string)
 								else:
-									print("Time elapsed: " + time_elapsed_string + ", Tempo: " + str(self.mod_tempo) + ", Ticks/Line: " + str(self.mod_ticks) + ", BPM: " + "%g" % mod_bpm + ", Order " + str(mod_order_position) + "/" + str(mod_song_length-1) + ", Pattern " + str(mod_order[mod_order_position]) + ", Line " + str(mod_line+1) + "  ",end="\r")
+									print("Time elapsed: " + time_elapsed_string + ", Tempo: " + str(self._mod_tempo) + ", Ticks/Line: " + str(self._mod_ticks) + ", BPM: " + "%g" % mod_bpm + ", Order " + str(mod_order_position) + "/" + str(mod_song_length-1) + ", Pattern " + str(mod_order[mod_order_position]) + ", Line " + str(mod_line+1) + "  ",end="\r")
 
 							mod_ticks_counter=0
 							mod_ticks_counter_actual=0 # the actual tick counter (e.g. by default this'll be from 0-6)
 							mod_ticks_counter_actual_previous=0
 
-							while mod_ticks_counter<mod_ms_per_tick*self.mod_ticks:
+							while mod_ticks_counter<mod_ms_per_tick*self._mod_ticks:
 								channel_sum_last=(channel_sum+32768) & 65535
 								channel_sum_left_last=(channel_sum_left+32768) & 65535
 								channel_sum_right_last=(channel_sum_right+32768) & 65535
 								mod_ticks_counter_actual_previous=mod_ticks_counter_actual
-								mod_ticks_counter_actual=int((mod_ticks_counter/(mod_ms_per_tick*self.mod_ticks))*self.mod_ticks)
+								mod_ticks_counter_actual=int((mod_ticks_counter/(mod_ms_per_tick*self._mod_ticks))*self._mod_ticks)
 								for channel in range(0,mod_channels):
 									if mod_ticks_counter_actual_previous!=mod_ticks_counter_actual or mod_ticks_counter==0: # on every tick (including the first)
 										fine_condition=mod_ticks_counter_actual>0
@@ -847,19 +869,19 @@ class pymod:
 
 										if mod_period[channel]>0:
 											if mod_glissando[channel]:
-												mod_frequency[channel]=pymod.mod_get_frequency(pymod.mod_get_closest_period(mod_period[channel],mod_samples[sample_number]["finetune"]))
+												mod_frequency[channel]=pymod._mod_get_frequency(pymod._mod_get_closest_period(mod_period[channel],mod_samples[sample_number]["finetune"]))
 											else:
 												if mod_arp_periods[channel]!=[0,0,0]:
 													if mod_arp_periods[channel][mod_arp_counter[channel]]>0:
-														mod_frequency[channel]=pymod.mod_get_frequency(mod_arp_periods[channel][mod_arp_counter[channel]])
+														mod_frequency[channel]=pymod._mod_get_frequency(mod_arp_periods[channel][mod_arp_counter[channel]])
 													else:
 														mod_frequency[channel]=0
 												else:
-													mod_frequency[channel]=pymod.mod_get_frequency(mod_period[channel]+mod_vibrato_offset[channel])
+													mod_frequency[channel]=pymod._mod_get_frequency(mod_period[channel]+mod_vibrato_offset[channel])
 										if mod_arp_periods[channel]!=[0,0,0]:
-											if self.mod_ticks==2:
+											if self._mod_ticks==2:
 												mod_arp_counter[channel]+=2
-											elif self.mod_ticks>2:
+											elif self._mod_ticks>2:
 												mod_arp_counter[channel]+=1
 											if mod_arp_counter[channel]>2:
 												mod_arp_counter[channel]=0
@@ -906,7 +928,7 @@ class pymod:
 												wave_type=mod_tremolo_wave[channel]
 											depth=memory & 0xf
 											if wave_type==0: # sine
-												offset=(pymod.mod_sine_table[counter]*depth)/128
+												offset=(pymod._mod_sine_table[counter]*depth)/128
 											elif wave_type==1: # ramp down
 												offset=((counter-32)*8*depth)/128
 											elif wave_type==2: # square
@@ -920,11 +942,11 @@ class pymod:
 											if mod_vibrato[channel]:
 												mod_vibrato_offset[channel]=offset
 												mod_vibrato_counter[channel]+=memory>>4
-												mod_vibrato_counter[channel]=mod_vibrato_counter[channel]%len(pymod.mod_sine_table)
+												mod_vibrato_counter[channel]=mod_vibrato_counter[channel]%len(pymod._mod_sine_table)
 											else:
 												mod_tremolo_offset[channel]=offset
 												mod_tremolo_counter[channel]+=memory>>4
-												mod_tremolo_counter[channel]=mod_tremolo_counter[channel]%len(pymod.mod_sine_table)
+												mod_tremolo_counter[channel]=mod_tremolo_counter[channel]%len(pymod._mod_sine_table)
 
 										if mod_note_cut_ticks[channel]>=0: # note actually cutting?
 											mod_note_cut_ticks[channel]-=1
@@ -941,10 +963,10 @@ class pymod:
 												mod_sample_position[channel]=0
 												mod_sample_volume[channel]=mod_samples[sample_number]["volume"]
 
-									sample_step_rate=mod_frequency[channel]/self.sample_rate
+									sample_step_rate=mod_frequency[channel]/self._sample_rate
 
 									if mod_sample_playing[channel]:
-										if self.render_file and self.render_channels and channel==channel_current:
+										if self._render_file and self._render_channels and channel==channel_current:
 											sample_byte_last=sample_byte_channel
 										sample_byte_position=int(mod_sample_offset[channel]+mod_sample_position[channel])
 										if sample_byte_position>len(mod_file)-1:
@@ -957,10 +979,10 @@ class pymod:
 											volume=0
 										volume/=64
 										sample_byte*=volume
-										if self.render_file and self.render_channels and channel==channel_current:
+										if self._render_file and self._render_channels and channel==channel_current:
 											sample_byte/=mod_channels_adjusted
 										sample_byte=int((sample_byte*32768)+32768)
-										if self.render_file and self.render_channels and channel==channel_current:
+										if self._render_file and self._render_channels and channel==channel_current:
 											sample_byte_channel=sample_byte
 
 										mod_sample_position[channel]+=sample_step_rate
@@ -969,7 +991,7 @@ class pymod:
 										if sample_byte_last!=32768:
 											sample_byte_last=32768
 									mod_channel_byte[channel]=sample_byte
-									if self.render_file and self.render_channels and channel==channel_current:
+									if self._render_file and self._render_channels and channel==channel_current:
 										if mod_filter:
 											sample_byte=(sample_byte_channel+sample_byte_last)//2
 										sample_byte=(sample_byte+32768) & 65535
@@ -980,7 +1002,7 @@ class pymod:
 								channel_sum_right=0
 								for counter,channel_byte in enumerate(mod_channel_byte):
 									if stereo:
-										channel_byte_panned=pymod.get_panned_bytes(channel_byte,mod_channel_pan[counter])
+										channel_byte_panned=pymod._get_panned_bytes(channel_byte,mod_channel_pan[counter])
 										channel_sum_left+=int(channel_byte_panned[0]*2)+32768
 										channel_sum_right+=int(channel_byte_panned[1]*2)+32768
 									else:
@@ -1011,8 +1033,8 @@ class pymod:
 								else:
 									channel_sum=(channel_sum+32768) & 65535
 
-								if self.render_file:
-									if not self.render_channels:
+								if self._render_file:
+									if not self._render_channels:
 										if stereo:
 											file_finished.append(channel_sum_left & 255)
 											file_finished.append(channel_sum_left>>8)
@@ -1077,7 +1099,7 @@ class pymod:
 								mod_position_break=False
 								mod_line_break=False
 
-								if mod_loops>self.loops-1:
+								if mod_loops>self._loops-1:
 									mod_order_position=mod_song_length # end
 									mod_line=mod_lines
 
@@ -1099,30 +1121,30 @@ class pymod:
 								mod_loops+=1
 						else:
 							mod_loops+=1
-						if mod_loops>self.loops-1: # copypasta SSSSHHHHH (but this is for when the pattern ends, not per line... so if you're line breaking/position breaking this won't be reached)
+						if mod_loops>self._loops-1: # copypasta SSSSHHHHH (but this is for when the pattern ends, not per line... so if you're line breaking/position breaking this won't be reached)
 							mod_order_position=mod_song_length # end
 							mod_line=mod_lines
 						mod_pointer=mod_pattern_offsets[mod_order[mod_order_position]]
 
-					if self.render_file and self.render_channels:
-						file_name=".".join(self.render_file.name.split(".")[:-1])[:-2]+"_"+str(channel_current+1)+"."+self.render_file.name.split(".")[-1]
+					if self._render_file and self._render_channels:
+						file_name=".".join(self._render_file.name.split(".")[:-1])[:-2]+"_"+str(channel_current+1)+"."+self._render_file.name.split(".")[-1]
 						with wave.open(file_name,"w") as wave_file:
 							wave_file.setnchannels(1)
 							wave_file.setsampwidth(2)
-							wave_file.setframerate(self.sample_rate)
+							wave_file.setframerate(self._sample_rate)
 							wave_file.writeframesraw(bytearray(channel_bytes))
 						channel_bytes.clear()
 						channel_current+=1
 
-				if self.render_file:
-					if not self.render_channels:
-						with wave.open(self.render_file.name,"w") as wave_file:
+				if self._render_file:
+					if not self._render_channels:
+						with wave.open(self._render_file.name,"w") as wave_file:
 							if stereo:
 								wave_file.setnchannels(2)
 							else:
 								wave_file.setnchannels(1)
 							wave_file.setsampwidth(2)
-							wave_file.setframerate(self.sample_rate)
+							wave_file.setframerate(self._sample_rate)
 							wave_file.writeframesraw(bytearray(file_finished))
 					print()
 					end_time=time.perf_counter()-start_time
