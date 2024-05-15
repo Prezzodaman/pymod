@@ -17,6 +17,7 @@ from .__about__ import __version__
 #   Kept the volume identical when rendering individual channels
 #   Fixed an issue when using the --channels/-c option and not rendering, causing the module to play indefinitely
 
+
 # -- Classes
 class pymod:
 	"""Python class that plays/renders ProTracker modules using PyAudio."""
