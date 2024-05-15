@@ -15,6 +15,6 @@
 # see <https://www.gnu.org/licenses/>.
 #
 
-from .pymod import pymod            # noqa: F401
+from .pymod import Module           # noqa: F401
 
 __all__ = []

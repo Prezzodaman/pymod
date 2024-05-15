@@ -16,8 +16,8 @@
 #
 
 import traceback
-
-from .pymod import pymod
+import argparse
+import pymod
 
 
 # -- This enables more debugging information for exceptions.
@@ -27,16 +27,34 @@ _debug_on: bool = False
 def main():
     global _debug_on
 
-    player = None
+    module = None
 
     try:
         _debug_on = True
 
-        player = pymod()
+        parser = argparse.ArgumentParser(description="Plays a .mod file")
+        parser.add_argument("input_file", type=argparse.FileType("r"), help="The name of the module")
+        parser.add_argument("sample_rate", type=int, help="Sample rate for playback/rendering")
+        parser.add_argument("play_mode", type=str, help="Selects a different play mode: " + ", ".join(pymod.Module.play_modes()))
+        parser.add_argument("-r", "--render", type=argparse.FileType("w"), help="Renders the module to a wave file. If rendering multiple channels, end the filename with _1 (e.g. pymod_1.wav) and the files will be numbered sequentially")
+        parser.add_argument("-l", "--loops", type=int, help="The amount of times to loop the module")
+        parser.add_argument("-v", "--verbose", action="store_true", help="If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.")
+        parser.add_argument("-c", "--channels", action="store_true", help="Renders each channel to its own file. If playing, this does nothing. The channel volume is reduced, so the result is identical when all channels are mixed together.")
+        parser.add_argument("-b", "--buffer", type=int, default=pymod.Module.buffer_size_default(), help="Change the buffer size for realtime playback (default is 1024)")
+        args = parser.parse_args()
 
-        if player is not None:
-            player.parse_args()
-            player.run()
+        module = pymod.Module(args.input_file.name)
+        module.set_sample_rate(args.sample_rate)
+        module.set_nb_of_loops(args.loops)
+        module.set_play_mode(args.play_mode.lower())
+        module.set_verbose(args.verbose)
+        module.set_buffer_size(args.buffer)
+
+        if module is not None:
+            if args.render is not None:
+                module.render_to(args.render.name, args.channels)
+            else:
+                module.play()
 
     except Exception as e:
         if _debug_on:
@@ -46,9 +64,6 @@ def main():
     except KeyboardInterrupt:
         print('Execution interrupted by user.')
         pass
-
-    if player is not None:
-        player.shutdown()
 
 
 if __name__ == '__main__':
