@@ -643,7 +643,7 @@ class pymod:
 											mod_invert_loop_speed[channel]=0
 										else:
 											mod_invert_loop_counter[channel]=0
-											mod_invert_loop_speed[channel]=pymod.__mod_funk_table[param]
+											mod_invert_loop_speed[channel]=pymod._mod_funk_table[param]
 									if effect==0xe: # pattern delay:
 										mod_pattern_delay=param
 									wave_type=param%4
