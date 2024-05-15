@@ -224,9 +224,13 @@ class pymod:
 		parser.add_argument("-b", "--buffer", type=int, default=pymod._buffer_size_default, help="Change the buffer size for realtime playback (default is 1024)")
 
 		args=parser.parse_args()
-		self.set_input_file(args.input_file.name)
+		if args.input_file is not None:
+			self.set_input_file(args.input_file.name)
+
+		if args.render is not None:
+			self.set_render_file(args.render.name)
+
 		self.set_sample_rate(args.sample_rate)
-		self.set_render_file(args.render)
 		self.set_nb_of_loops(args.loops)
 		self.set_render_channels(args.channels)
 		self.set_play_mode(args.play_mode.lower())
@@ -285,7 +289,7 @@ class pymod:
 			print("Error: Invalid play mode: " + self._play_mode + ". Accepted modes: " + ", ".join(pymod._play_modes))
 		elif self._buffer_size<0 or self._buffer_size>8192:
 			print("Error: Buffer size must be between 0 and 8192!")
-		elif self._render_file and self._render_channels and not self._render_file.name.endswith("_1.wav"):
+		elif self._render_file and self._render_channels and not self._render_file.endswith("_1.wav"):
 			print("Error: File name is suffixed incorrectly for channel rendering!")
 		elif not self._render_file and self._render_channels:
 			print("Error: The --channels/-c option can only be used alongside the --render/-r option!")
@@ -1128,7 +1132,7 @@ class pymod:
 						mod_pointer=mod_pattern_offsets[mod_order[mod_order_position]]
 
 					if self._render_file and self._render_channels:
-						file_name=".".join(self._render_file.name.split(".")[:-1])[:-2]+"_"+str(channel_current+1)+"."+self._render_file.name.split(".")[-1]
+						file_name=".".join(self._render_file.split(".")[:-1])[:-2]+"_"+str(channel_current+1)+"."+self._render_file.split(".")[-1]
 						with wave.open(file_name,"w") as wave_file:
 							wave_file.setnchannels(1)
 							wave_file.setsampwidth(2)
@@ -1139,7 +1143,7 @@ class pymod:
 
 				if self._render_file:
 					if not self._render_channels:
-						with wave.open(self._render_file.name,"w") as wave_file:
+						with wave.open(self._render_file,"w") as wave_file:
 							if stereo:
 								wave_file.setnchannels(2)
 							else:
