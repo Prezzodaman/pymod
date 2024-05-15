@@ -7,7 +7,7 @@ name = "pymod"
 description = "Python program that plays/renders ProTracker modules using PyAudio."
 readme = "README.md"
 requires-python = ">=3.8"
-license = "MIT"
+license = "GPL-3.0-or-later"
 keywords = ["protracker", "soundtracker", "amiga"]
 authors = [
   { name = "Presley Peters", email = "presleypeters04@gmail.com" },
