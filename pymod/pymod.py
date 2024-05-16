@@ -123,14 +123,17 @@ class Module:
         180, 161, 141, 120, 97, 74, 49, 24
     ]
 
+    # the protracker sine table is only half a wave, so we're completing it here
+    for a in range(0, len(_mod_sine_table)):
+        _mod_sine_table.append(0 - _mod_sine_table[a])
+
     _mod_funk_table = [  # this sounds like something i made up, but it's actually called the funk table :D
         0, 5, 6, 7, 8, 10, 11, 13, 16,
         19, 22, 26, 32, 43, 64, 128
     ]
 
     # -- Class Methods
-    @classmethod
-    def _generateTestFiles(cls):
+    @classmethod    def _generateTestFiles(cls):
         """Generate all the test files used to compare against in the uniot tests.
            This should only be used in a local repo and not with an installed module."""
 
@@ -210,17 +213,13 @@ class Module:
     def __init__(self, input_file_path):
         """Constructor based on command line arguments."""
 
-        for a in range(0, len(Module._mod_sine_table)):  # the protracker sine table is only half a wave, so we're completing it here
-            Module._mod_sine_table.append(0 - Module._mod_sine_table[a])
-
         self._mod_tempo = 125
         self._mod_ticks = 6
 
         self._input_file = input_file_path
         self._sample_rate = 44100
         self._render_file = None
-        self._loops = False
-        self._render_channels = False
+        self._loops = False        self._render_channels = False
         self._play_mode = "mono"
         self._verbose = False
         self._buffer_size = Module.buffer_size_default()
