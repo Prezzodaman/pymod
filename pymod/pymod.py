@@ -24,7 +24,7 @@ import os
 from .__about__ import __version__
 
 # 1.0.1:
-#     Partially fixed an offset issue with Ode2ptk.mod when rendering individual channels
+#   Partially fixed an offset issue with Ode2ptk.mod when rendering individual channels
 #   Kept the volume identical when rendering individual channels
 #   Fixed an issue when using the --channels/-c option and not rendering, causing the module to play indefinitely
 
@@ -32,6 +32,7 @@ from .__about__ import __version__
 # -- Classes
 class Module:
     """Python class that plays/renders ProTracker modules using PyAudio."""
+
     # -- Class Variables
     _mod_periods = [
         [  # no finetune
@@ -133,7 +134,8 @@ class Module:
     ]
 
     # -- Class Methods
-    @classmethod    def _generateTestFiles(cls):
+    @classmethod
+    def _generateTestFiles(cls):
         """Generate all the test files used to compare against in the uniot tests.
            This should only be used in a local repo and not with an installed module."""
 
@@ -169,6 +171,7 @@ class Module:
             return 7093789 / (period * 2)
         else:
             return 0
+
     @classmethod
     def _mod_get_period_note(cls, period):  # returns the note value
         note = -1
@@ -219,7 +222,8 @@ class Module:
         self._input_file = input_file_path
         self._sample_rate = 44100
         self._render_file = None
-        self._loops = False        self._render_channels = False
+        self._loops = False
+        self._render_channels = False
         self._play_mode = "mono"
         self._verbose = False
         self._buffer_size = Module.buffer_size_default()
