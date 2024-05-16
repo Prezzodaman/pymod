@@ -19,6 +19,7 @@ import wave
 import time
 import pyaudio
 import random
+import os
 
 from .__about__ import __version__
 
@@ -31,7 +32,6 @@ from .__about__ import __version__
 # -- Classes
 class Module:
     """Python class that plays/renders ProTracker modules using PyAudio."""
-
     # -- Class Variables
     _mod_periods = [
         [  # no finetune
@@ -130,12 +130,42 @@ class Module:
 
     # -- Class Methods
     @classmethod
+    def _generateTestFiles(cls):
+        """Generate all the test files used to compare against in the uniot tests.
+           This should only be used in a local repo and not with an installed module."""
+
+        source_folder = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+        modules_folder = os.path.join(source_folder, 'tests', 'modules')
+        wavs_folder = os.path.join(source_folder, 'tests', 'wavs')
+
+        if not os.path.exists(modules_folder) or not os.path.exists(wavs_folder):
+            print('ERROR: This should be used on a local repo, not an installed module.')
+            return
+
+        for filename in os.listdir(modules_folder):
+            module_file_path = os.path.join(modules_folder, filename)
+            if not os.path.isfile(module_file_path) or not os.path.splitext(filename)[1] == '.mod':
+                continue
+
+            # -- This makes sure the random offset value used in some effect matches
+            # -- the one used during unit testing.
+            random.seed(23)
+
+            module = Module(module_file_path)
+            assert module is not None
+
+            module.set_sample_rate(44100)
+            module.set_play_mode('stereo_hard')
+
+            print(module_file_path)
+            module.render_to(os.path.join(wavs_folder, os.path.splitext(filename)[0] + '.wav'))
+
+    @classmethod
     def _mod_get_frequency(cls, period):
         if period > 0:
             return 7093789 / (period * 2)
         else:
             return 0
-
     @classmethod
     def _mod_get_period_note(cls, period):  # returns the note value
         note = -1
