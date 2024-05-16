@@ -228,32 +228,9 @@ class Module:
         self._verbose = False
         self._buffer_size = Module.buffer_size_default()
 
-    def set_sample_rate(self, rate):
-        self._sample_rate = rate
-
-    def set_nb_of_loops(self, nb_of_loops):
-        self._loops = nb_of_loops
-
-    def set_play_mode(self, play_mode):
-        self._play_mode = play_mode
-
-    def set_verbose(self, flag):
-        self._verbose = flag
-
-    def set_buffer_size(self, size):
-        self._buffer_size = size
-
     # https://modarchive.org/forums/index.php?topic = 2709.0
     def _mod_get_tempo_length(self):
         return (2500 / self._mod_tempo) * (self._sample_rate / 1000)
-
-    def play(self):
-        self._run()
-
-    def render_to(self, filepath, seperate_channels=False):
-        self._render_file = filepath
-        self._render_channels = seperate_channels
-        self._run()
 
     def _run(self):
         if self._input_file is None:
@@ -1187,3 +1164,26 @@ class Module:
                     stream.stop_stream()
                     stream.close()
                     pya.terminate()
+
+    def set_sample_rate(self, rate):
+        self._sample_rate = rate
+
+    def set_nb_of_loops(self, nb_of_loops):
+        self._loops = nb_of_loops
+
+    def set_play_mode(self, play_mode):
+        self._play_mode = play_mode
+
+    def set_verbose(self, flag):
+        self._verbose = flag
+
+    def set_buffer_size(self, size):
+        self._buffer_size = size
+
+    def play(self):
+        self._run()
+
+    def render_to(self, filepath, seperate_channels=False):
+        self._render_file = filepath
+        self._render_channels = seperate_channels
+        self._run()
