@@ -23,6 +23,72 @@ I've included a bunch of test modules that I made myself; they're free for anyon
     * Authentic arpeggio behaviour (period wraparound, "sample cutting" and missed notes)
     * Accurate "invert loop" implementation, using the patented ProTracker Funk Table&trade;
 
+## Installation
+
+pymod requires at least [Python](https://python.org) 3.8. You can install it by installing [pip](https://packaging.python.org/en/latest/tutorials/installing-packages/) and typing the following in a terminal window:
+
+```console
+pip install pymod
+```
+
+You will also need to install [portaudio](https://www.portaudio.com). On macOS you can do this via [brew](https://brew.sh):
+
+```console
+brew install portaudio
+```
+
+## Usage
+
+pymod can be used to play a module from the command line:
+```console
+pymod <options> <path to .mod file> <sample rate> <play mode>
+```
+
+- `sample rate` is the rate at which the module is played or rendered.
+- `play mode` is either:
+    * `info` : Just display info on the module.
+    * `test` : Display the module text (list of samples names where mod authors often hide info text).
+    * `mono` or `mono_filter` : play/render the module in mono. With or without filter enabled.
+    * `stereo_soft` or `stereo_soft_filter` : play/render the module with a soft/partial stereo separation. With or without filter enabled.
+    * `stereo_hard` or `stereo_hard_filter` : play/render the module with a hard stereo separation. With or without filter enabled.
+- `options` can be:
+    * `--render=<path to wav file>` : Renders the module to a wave file. If rendering multiple channels, end the filename with _1 (e.g. pymod_1.wav) and the files will be numbered sequentially.
+    * `--loops=<number of loops>` : The amount of times to loop the module.
+    * `--verbose` : If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.
+    * `--channels` : Renders each channel to its own file. If playing, this does nothing.
+    * `--buffer` : Change the buffer size for realtime playback (default is 1024).
+
+Pymod can also be imported into your Python programs and used as a module:
+
+```python
+import pymod
+
+module = pymod.Module(<path_to_mod_file>)
+
+if module is not None:
+    module.play()
+```
+
+or
+
+```python
+import pymod
+
+module = pymod.Module(<path_to_mod_file>)
+
+if module is not None:
+    module.render_to(<path_to_wav_file_to_render_to>, <optional flag to render channels separatly>)
+```
+
+The `Module` instance also has these methods:
+
+- `set_sample_rate(<rate>)` : Set the rate at which the module is played or rendered.
+- `set_nb_of_loops(<nb_of_loops>)` : Set the amount of times to loop the module.
+- `set_play_mode(<play_mode>)` : Set the play mode, similar the values used by the command line version.
+- `set_verbose(<flag>)` : If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.
+- `set_buffer_size(<size>)` : Change the buffer size for realtime playback (default is 1024).
+
+
 ## Remarks
 * Rendering can be quite slow ("Ode to ProTracker" at 48k in mono takes 23 seconds), but during real-time playback, it's fast enough, unless the module has lots of channels.
 * The sample rate has a surprising effect on the quality of samples! Higher sample rates will sound better, but it'll use a lot more processing time. 48000 Hz is recommended!

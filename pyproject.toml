@@ -7,7 +7,7 @@ name = "pymod"
 description = "Python program that plays/renders ProTracker modules using PyAudio."
 readme = "README.md"
 requires-python = ">=3.8"
-license = "MIT"
+license = "GPL-3.0-or-later"
 keywords = ["protracker", "soundtracker", "amiga"]
 authors = [
   { name = "Presley Peters", email = "presleypeters04@gmail.com" },
@@ -34,6 +34,38 @@ exclude = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["pymod"]
+
+[tool.hatch.envs.default]
+dependencies = [
+  "pytest",
+  "pytest-cov",
+]
+
+[tool.hatch.envs.default.scripts]
+cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=TraktorBuddy --cov=tests"
+no-cov = "cov --no-cov"
+
+[tool.hatch.envs.test]
+dependencies = [
+  "pytest"
+]
+
+[[tool.hatch.envs.test.matrix]]
+python = ["38"]
+
+[tool.coverage.run]
+branch = true
+parallel = true
+omit = [
+  "TraktorBuddy/__about__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
 
 [project.scripts]
 pymod = "pymod.__main__:main"
