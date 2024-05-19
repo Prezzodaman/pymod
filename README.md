@@ -31,7 +31,7 @@ pymod requires at least [Python](https://python.org) 3.8. You can install it by 
 pip install pymod
 ```
 
-You will also need to install [portaudio](https://www.portaudio.com). On macOS you can do this via [brew](https://brew.sh):
+You will also need to install [portaudio](https://www.portaudio.com), which is required by PyAudio. On macOS you can do this via [brew](https://brew.sh):
 
 ```console
 brew install portaudio
@@ -44,19 +44,20 @@ pymod can be used to play a module from the command line:
 pymod <options> <path to .mod file> <sample rate> <play mode>
 ```
 
-- `sample rate` is the rate at which the module is played or rendered.
-- `play mode` is either:
-    * `info` : Just display info on the module.
-    * `test` : Display the module text (list of samples names where mod authors often hide info text).
+- `sample rate` is the sample rate at which the module is played or rendered.
+- `play mode` can be one of the following:
+    * `info` : Just display info about the module.
+    * `text` : Display the module text (list of sample names where mod authors often hide info text).
     * `mono` or `mono_filter` : play/render the module in mono. With or without filter enabled.
-    * `stereo_soft` or `stereo_soft_filter` : play/render the module with a soft/partial stereo separation. With or without filter enabled.
-    * `stereo_hard` or `stereo_hard_filter` : play/render the module with a hard stereo separation. With or without filter enabled.
+    * `stereo_soft` or `stereo_soft_filter` : play/render the module with a soft/partial stereo separation (with or without filter enabled)
+    * `stereo_hard` or `stereo_hard_filter` : play/render the module with a hard stereo separation (with or without filter enabled)
 - `options` can be:
-    * `--render=<path to wav file>` : Renders the module to a wave file. If rendering multiple channels, end the filename with _1 (e.g. pymod_1.wav) and the files will be numbered sequentially.
-    * `--loops=<number of loops>` : The amount of times to loop the module.
-    * `--verbose` : If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.
-    * `--channels` : Renders each channel to its own file. If playing, this does nothing.
-    * `--buffer` : Change the buffer size for realtime playback (default is 1024).
+    * `--render=<path to wav file> (-r)` : Renders the module to a wave file. If rendering multiple channels, end the filename with _1 (e.g. pymod_1.wav) and the files will be numbered sequentially.
+    * `--loops=<number of loops> (-l)` : The amount of times to loop the module. If this option isn't specified, the module will play once.
+    * `--verbose (-v)` : If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.
+    * `--channels (-c)` : Renders each channel to its own file. If playing, this does nothing.
+    * `--buffer <buffer size> (-b)` : Change the buffer size for realtime playback (default is 1024).
+    * `--quiet` : Shows absolutely no info while playing/rendering a module.
 
 Pymod can also be imported into your Python programs and used as a module:
 
@@ -82,11 +83,12 @@ if module is not None:
 
 The `Module` instance also has these methods:
 
-- `set_sample_rate(<rate>)` : Set the rate at which the module is played or rendered.
+- `set_sample_rate(<rate>)` : Set the sample rate at which the module is played or rendered.
 - `set_nb_of_loops(<nb_of_loops>)` : Set the amount of times to loop the module.
-- `set_play_mode(<play_mode>)` : Set the play mode, similar the values used by the command line version.
+- `set_play_mode(<play_mode>)` : Set the play mode (<play_mode> is a string containing one of the play modes listed above)
 - `set_verbose(<flag>)` : If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.
 - `set_buffer_size(<size>)` : Change the buffer size for realtime playback (default is 1024).
+- `set_quiet(<flag>)` : If true, this shows absolutely no info while playing/rendering a module.
 
 
 ## Remarks
@@ -94,6 +96,7 @@ The `Module` instance also has these methods:
 * The sample rate has a surprising effect on the quality of samples! Higher sample rates will sound better, but it'll use a lot more processing time. 48000 Hz is recommended!
 * The filter "simulation" is far from perfect; it's very subtle, but it's there. I have no plans to make it accurate, as E0x is almost never used. It's only here for the sake of completion!
 * Rendering channels individually will take much longer. For example, a 4 channel module will take 4x as long, as it goes through the whole module for each channel. It's done this way so it uses less RAM, instead of storing all the channels at once.
+	* The individual files will be at the same volume as if playing a module normally.
 
 ## Supported effects
 * **0xy** - Arpeggio
@@ -132,4 +135,5 @@ The `Module` instance also has these methods:
 * **ModArchive.org** - For being an invaluable resource to the tracking community
 * **FireLight** - For creating "fmoddoc2.zip", the best source of information for writing module players!
 * **Warren Willmey** - For documenting some overlooked ProTracker quirks for Weasel Audio Library, and making some very useful test modules
+* **Didier Malenfant** - For helping generously and doing the unthinkable: helping turn Pymod into a useable module! (no, not that kind)
 * **The tracking community** - For being so creative :)

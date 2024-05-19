@@ -35,7 +35,9 @@ modules_list = [
     'delaysim.mod', 'line.mod', 'pan.mod', 'position.mod', 'volslide.mod',
     'filter.mod', 'loop.mod', 'patdelay.mod', 'pwm.mod', 'volslide2.mod',
     'fine.mod', 'loud.mod', 'patloop2.mod', 'simpy.mod', 'volume2.mod',
-    'fine2.mod', 'nonexistence.mod', 'port1.mod', 'test.mod', 'weirdthing.mod'
+    'fine2.mod', 'nonexistence.mod', 'port1.mod', 'test.mod', 'weirdthing.mod',
+    'cuts.mod', 'ode2ptk.mod', 'wraparound.mod', 'wraparound2.mod', 'breaks.mod',
+    'breaks2.mod', 'volall.mod'
 ]
 
 
@@ -51,13 +53,13 @@ def test_render(filename, tmp_path):
 
     temp_file = os.path.join(tmp_path, 'pymod-test-' + wav_filename)
 
-    # -- This makes sure the random offset value used in some effect matches the one for the test files we compare against
-    random.seed(23)
-
     module = pymod.Module(module_filepath)
     assert module is not None
 
-    module.set_sample_rate(44100)
+    # -- This makes sure the random offset value used in some effect matches the one for the test files we compare against
+    random.seed(module.render_test_random_seed())
+
+    module.set_sample_rate(module.render_test_sample_rate())
     module.set_play_mode('stereo_hard')
     module.render_to(temp_file)
 
