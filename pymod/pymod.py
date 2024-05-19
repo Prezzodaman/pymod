@@ -496,7 +496,7 @@ class Module:
                     mod_volslide_amount = [0] * mod_channels
                     mod_volslide_fine = [False] * mod_channels  # if true, the volume is slid on the first tick ONLY
                     mod_port_fine = [False] * mod_channels  # same but for fine pitch slides
-                    mod_note_cut_ticks = [-1] * mod_channels  # counts down, when it reaches 0, the note is cut. -1 means no cut
+                    mod_note_cut_ticks = [-1] * mod_channels  # counts down, when it reaches 0, the note is cut. -1 means no cut, -2 means the note is ignored
                     mod_note_delay_ticks = [-1] * mod_channels  # counts down, when it reaches 0, the note is played. -1 means no delay
                     mod_port_amount = [0] * mod_channels
                     mod_tone_period = [0] * mod_channels  # the period we're sliding from
@@ -1199,9 +1199,13 @@ class Module:
                                 mod_order_position = 0
                                 mod_pointer = mod_pattern_offsets[mod_order[0]]
                                 mod_line = 0
-                                mod_loops += 1
+                                if not mod_looped:
+                                    mod_looped = True
+                                    mod_loops += 1
                         else:
-                            mod_loops += 1
+                            if not mod_looped:
+                                mod_looped = True
+                                mod_loops += 1
                         if mod_loops > self._loops - 1:  # copypasta SSSSHHHHH (but this is for when the pattern ends, not per line... so if you're line breaking/position breaking this won't be reached)
                             mod_order_position = mod_song_length  # end
                             mod_line = mod_lines
@@ -1245,8 +1249,9 @@ class Module:
                             stringy += f"{minutes} minutes, {seconds} seconds!"
                         print(stringy)
                 else:
-                    print()
-                    print("Done!")
+                    if not self._quiet:
+                        print()
+                        print("Done!")
                     stream.stop_stream()
                     stream.close()
                     pya.terminate()

@@ -78,7 +78,7 @@ import pymod
 module = pymod.Module(<path_to_mod_file>)
 
 if module is not None:
-    module.render_to(<path_to_wav_file_to_render_to>, <optional flag to render channels separatly>)
+    module.render_to(<path_to_wav_file_to_render_to>, <optional flag to render channels separately>)
 ```
 
 The `Module` instance also has these methods:
@@ -90,6 +90,7 @@ The `Module` instance also has these methods:
 - `set_buffer_size(<size>)` : Change the buffer size for realtime playback (default is 1024).
 - `set_quiet(<flag>)` : If true, this shows absolutely no info while playing/rendering a module.
 
+By default, the sample rate is 44100 Hz and the play mode is mono. These can be changed on init by specifying any one of the optional arguments `sample_rate`, `play_mode`. `verbose` or `quiet` can also be specified as arguments.
 
 ## Remarks
 * Rendering can be quite slow ("Ode to ProTracker" at 48k in mono takes 23 seconds), but during real-time playback, it's fast enough, unless the module has lots of channels.
