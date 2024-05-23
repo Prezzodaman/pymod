@@ -24,7 +24,6 @@ I've included a bunch of test modules that I made myself; they're free for anyon
     * Accurate "invert loop" implementation, using the patented ProTracker Funk Table&trade;
 
 ## Installation
-
 pymod requires at least [Python](https://python.org) 3.8. You can install it by installing [pip](https://packaging.python.org/en/latest/tutorials/installing-packages/) and typing the following in a terminal window:
 
 ```console
@@ -38,7 +37,6 @@ brew install portaudio
 ```
 
 ## Usage
-
 pymod can be used to play a module from the command line:
 ```console
 pymod <options> <path to .mod file> <sample rate> <play mode>
@@ -91,6 +89,18 @@ The `Module` instance also has these methods:
 - `set_quiet(<flag>)` : If true, this shows absolutely no info while playing/rendering a module.
 
 By default, the sample rate is 44100 Hz and the play mode is mono. These can be changed on init by specifying any one of the optional arguments `sample_rate`, `play_mode`. `verbose` or `quiet` can also be specified as arguments.
+
+## Unit testing
+Unit tests can be run by using `pytest`. These tests run against a set of pre-generated wav files to make sure that the output is consistent across changes.
+
+These test files can be re-generated, when a change requires it, by running Python in interactive mode from the project's root folder and typing:
+```
+import sys
+import os
+sys.path.insert(0, os.getcwd())
+import pymod
+pymod.Module._generateTestFiles()
+```
 
 ## Remarks
 * Rendering can be quite slow ("Ode to ProTracker" at 48k in mono takes 23 seconds), but during real-time playback, it's fast enough, unless the module has lots of channels.
