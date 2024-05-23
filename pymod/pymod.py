@@ -261,13 +261,10 @@ class Module:
     def __init__(self, input_file_path, sample_rate=44100, play_mode="mono", verbose=False, quiet=False):
         """Constructor based on command line arguments."""
 
-        self._mod_tempo = 125
-        self._mod_ticks = 6
-
         self._input_file = input_file_path
         self._sample_rate = sample_rate
         self._render_file = None
-        self._loops = False
+        self._loops_init = 1
         self._render_channels = False
         self._play_mode = play_mode
         self._verbose = verbose
@@ -282,10 +279,9 @@ class Module:
         if self._input_file is None:
             print("Error: Missing module filename!")
 
-        if self._loops is None:
-            self._loops = 1
-        else:
-            self._loops += 1
+        self._mod_tempo = 125
+        self._mod_ticks = 6
+        self._loops = self._loops_init
 
         if not self._quiet:
             print(f"Pymod v{__version__}")
@@ -1260,7 +1256,7 @@ class Module:
         self._sample_rate = rate
 
     def set_nb_of_loops(self, nb_of_loops):
-        self._loops = nb_of_loops
+        self._init_loops = nb_of_loops
 
     def set_play_mode(self, play_mode):
         self._play_mode = play_mode
