@@ -24,7 +24,6 @@ I've included a bunch of test modules that I made myself; they're free for anyon
     * Accurate "invert loop" implementation, using the patented ProTracker Funk Table&trade;
 
 ## Installation
-
 pymod requires at least [Python](https://python.org) 3.8. You can install it by installing [pip](https://packaging.python.org/en/latest/tutorials/installing-packages/) and typing the following in a terminal window:
 
 ```console
@@ -38,7 +37,6 @@ brew install portaudio
 ```
 
 ## Usage
-
 pymod can be used to play a module from the command line:
 ```console
 pymod <options> <path to .mod file> <sample rate> <play mode>
