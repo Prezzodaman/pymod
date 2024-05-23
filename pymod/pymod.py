@@ -455,7 +455,6 @@ class Module:
                 channel_sum_left = 0
                 channel_sum_right = 0
                 channel_current = 0  # used when rendering individual channels
-                channel_bytes = []
                 while_condition = True
                 while while_condition:
                     mod_jumps = [[0, 0]]
@@ -544,7 +543,6 @@ class Module:
                     mod_bpm = 0  # calculated from the tempo and ticks/line (only used for a visual indicator)
 
                     sample_byte = 32768
-                    sample_byte_channel = 32768
                     sample_byte_last = 32768
 
                     if self._render_channels:
@@ -1035,7 +1033,7 @@ class Module:
 
                                     sample_step_rate = mod_frequency[channel] / self._sample_rate
 
-                                    if mod_sample_playing[channel]:
+                                    if mod_sample_playing[channel] and (self._render_file is None or not self._render_channels or channel == channel_current):
                                         sample_byte_position = int(mod_sample_offset[channel] + mod_sample_position[channel])
                                         if sample_byte_position > len(mod_file) - 1:
                                             sample_byte_position = len(mod_file) - 1
@@ -1053,63 +1051,58 @@ class Module:
                                         sample_byte = 32768
                                         if sample_byte_last != 32768:
                                             sample_byte_last = 32768
+
                                     mod_channel_byte[channel] = sample_byte
-                                if self._render_channels:
-                                    if self._render_file is not None:  # if rendering channels...
-                                        sample_byte = mod_channel_byte[channel_current]  # ...use the sample byte from the current channel
-                                        if mod_filter:
-                                            sample_byte = (sample_byte_channel + sample_byte_last) // 2
-                                        sample_byte = ((sample_byte - 32768) // mod_channels_adjusted) + 32768  # reduce volume of this channel
-                                        sample_byte = (sample_byte + 32768) & 65535
-                                        channel_bytes.append(sample_byte & 255)
-                                        channel_bytes.append(sample_byte >> 8)
-                                else:  # if not rendering channels, add all channels together into one or two summed byte(s)
-                                    channel_sum = 0
-                                    channel_sum_left = 0
-                                    channel_sum_right = 0
-                                    for counter, channel_byte in enumerate(mod_channel_byte):
-                                        if stereo:
-                                            channel_byte_panned = Module._get_panned_bytes(channel_byte, mod_channel_pan[counter])
-                                            channel_sum_left += int(channel_byte_panned[0] * 2) + 32768
-                                            channel_sum_right += int(channel_byte_panned[1] * 2) + 32768
-                                        else:
-                                            channel_sum += channel_byte
+
+                                channel_sum = 0
+                                channel_sum_left = 0
+                                channel_sum_right = 0
+                                for counter, channel_byte in enumerate(mod_channel_byte):
                                     if stereo:
-                                        channel_sum_left //= mod_channels_adjusted
-                                        channel_sum_right //= mod_channels_adjusted
-                                        if channel_sum_left > 65535:
-                                            channel_sum_left = 65535
-                                        if channel_sum_left < 0:
-                                            channel_sum_left = 0
-                                        if channel_sum_right > 65535:
-                                            channel_sum_right = 65535
-                                        if channel_sum_right < 0:
-                                            channel_sum_right = 0
+                                        channel_byte_panned = Module._get_panned_bytes(channel_byte, mod_channel_pan[counter])
+                                        channel_sum_left += int(channel_byte_panned[0] * 2) + 32768
+                                        channel_sum_right += int(channel_byte_panned[1] * 2) + 32768
+
                                     else:
-                                        channel_sum //= mod_channels_adjusted
-                                    if mod_filter:
-                                        if stereo:
-                                            channel_sum_left = (channel_sum_left + channel_sum_left_last) // 2
-                                            channel_sum_right = (channel_sum_right + channel_sum_right_last) // 2
-                                        else:
-                                            channel_sum = (channel_sum + channel_sum_last) // 2
+                                        channel_sum += channel_byte
+
+                                if stereo:
+                                    channel_sum_left //= mod_channels_adjusted
+                                    channel_sum_right //= mod_channels_adjusted
+                                    if channel_sum_left > 65535:
+                                        channel_sum_left = 65535
+                                    if channel_sum_left < 0:
+                                        channel_sum_left = 0
+                                    if channel_sum_right > 65535:
+                                        channel_sum_right = 65535
+                                    if channel_sum_right < 0:
+                                        channel_sum_right = 0
+                                else:
+                                    channel_sum //= mod_channels_adjusted
+
+                                if mod_filter:
                                     if stereo:
-                                        channel_sum_left = (channel_sum_left + 32768) & 65535
-                                        channel_sum_right = (channel_sum_right + 32768) & 65535
-                                        channel_sum_stereo = channel_sum_left | (channel_sum_right << 16)
+                                        channel_sum_left = (channel_sum_left + channel_sum_left_last) // 2
+                                        channel_sum_right = (channel_sum_right + channel_sum_right_last) // 2
                                     else:
-                                        channel_sum = (channel_sum + 32768) & 65535
+                                        channel_sum = (channel_sum + channel_sum_last) // 2
+
+                                if stereo:
+                                    channel_sum_left = (channel_sum_left + 32768) & 65535
+                                    channel_sum_right = (channel_sum_right + 32768) & 65535
+                                    channel_sum_stereo = channel_sum_left | (channel_sum_right << 16)
+                                else:
+                                    channel_sum = (channel_sum + 32768) & 65535
 
                                 if self._render_file is not None:  # if rendering a file, append sample bytes to the finished file
-                                    if not self._render_channels:
-                                        if stereo:
-                                            file_finished.append(channel_sum_left & 255)
-                                            file_finished.append(channel_sum_left >> 8)
-                                            file_finished.append(channel_sum_right & 255)
-                                            file_finished.append(channel_sum_right >> 8)
-                                        else:
-                                            file_finished.append(channel_sum & 255)
-                                            file_finished.append(channel_sum >> 8)
+                                    if stereo:
+                                        file_finished.append(channel_sum_left & 255)
+                                        file_finished.append(channel_sum_left >> 8)
+                                        file_finished.append(channel_sum_right & 255)
+                                        file_finished.append(channel_sum_right >> 8)
+                                    else:
+                                        file_finished.append(channel_sum & 255)
+                                        file_finished.append(channel_sum >> 8)
                                 else:  # if not rendering, write to stream
                                     if stereo:
                                         stream.write(channel_sum_stereo.to_bytes(length=4, byteorder="little"))
@@ -1207,23 +1200,9 @@ class Module:
                             mod_line = mod_lines
                         mod_pointer = mod_pattern_offsets[mod_order[mod_order_position]]
 
-                    if self._render_file is not None and self._render_channels:
-                        dir_name = os.path.dirname(self._render_file)
-                        if dir_name != "":
-                            dir_name += "/"
-                        base_name = os.path.splitext(os.path.basename(self._render_file))[0][:-2]  # file name, minus the _1
-                        file_name = f"{dir_name}{base_name}_{channel_current + 1}.wav"
-                        with wave.open(file_name, "w") as wave_file:
-                            wave_file.setnchannels(1)
-                            wave_file.setsampwidth(2)
-                            wave_file.setframerate(self._sample_rate)
-                            wave_file.writeframesraw(bytearray(channel_bytes))
-                        channel_bytes.clear()
-                        channel_current += 1
-
-                if self._render_file is not None:
-                    if not self._render_channels:
-                        with wave.open(self._render_file, "w") as wave_file:
+                    if not while_condition or (self._render_file is not None and self._render_channels):
+                        file_name = self._render_file if not self._render_channels else ".".join(self._render_file.split(".")[:-1])[:-2] + "_" + str(channel_current + 1) + "." + self._render_file.split(".")[-1]
+                        with wave.open(file_name, "wb") as wave_file:
                             if stereo:
                                 wave_file.setnchannels(2)
                             else:
@@ -1231,6 +1210,10 @@ class Module:
                             wave_file.setsampwidth(2)
                             wave_file.setframerate(self._sample_rate)
                             wave_file.writeframesraw(bytearray(file_finished))
+                        file_finished.clear()
+                        channel_current += 1
+
+                if self._render_file is not None:
                     end_time = time.perf_counter() - start_time
                     minutes = int(end_time // 60)  # for some reason it was giving me 1.0 even though it's integer division :/
                     seconds = int(end_time % 60)
