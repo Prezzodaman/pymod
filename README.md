@@ -90,6 +90,18 @@ The `Module` instance also has these methods:
 
 By default, the sample rate is 44100 Hz and the play mode is mono. These can be changed on init by specifying any one of the optional arguments `sample_rate`, `play_mode`. `verbose` or `quiet` can also be specified as arguments.
 
+## Unit testing
+Unit tests can be run by using `pytest`. These tests run against a set of pre-generated wav files to make sure that the output is consistent across changes.
+
+These test files can be re-generated, when a change requires it, by running Python in interactive mode from the project's root folder and typing:
+```
+import sys
+import os
+sys.path.insert(0, os.getcwd())
+import pymod
+pymod.Module._generateTestFiles()
+```
+
 ## Remarks
 * Rendering can be quite slow ("Ode to ProTracker" at 48k in mono takes 23 seconds), but during real-time playback, it's fast enough, unless the module has lots of channels.
 * The sample rate has a surprising effect on the quality of samples! Higher sample rates will sound better, but it'll use a lot more processing time. 48000 Hz is recommended!
