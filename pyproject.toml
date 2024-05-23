@@ -38,7 +38,7 @@ packages = ["pymod"]
 dependencies = [ "pytest", "pytest-cov" ]
 
 [tool.hatch.envs.default.scripts]
-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=TraktorBuddy --cov=tests"
+cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=pymod --cov=tests"
 no-cov = "cov --no-cov"
 
 [tool.hatch.envs.test]
@@ -50,9 +50,7 @@ python = ["38"]
 [tool.coverage.run]
 branch = true
 parallel = true
-omit = [
-  "TraktorBuddy/__about__.py",
-]
+omit = ["pymod/__about__.py"]
 
 [tool.coverage.report]
 exclude_lines = [
