@@ -21,33 +21,115 @@ import os
 import filecmp
 import random
 
+import wave
+
 # -- We need to import from our parent folder here.
 sys.path.append(os.path.join(sys.path[0], '..'))
 
 import pymod    # noqa: E402
 
 
+# -- Utility functions
+def check_wave_file(wave_file):
+    '''Makes sure the wav file is the correct type/format.'''
+    assert wave_file.getnchannels() == 2
+    assert wave_file.getsampwidth() == 2
+    assert wave_file.getframerate() == pymod.Module.render_test_sample_rate()
+    assert wave_file.getcomptype() == 'NONE'
+
+
+def read_wave_file(filepath):
+    data = []
+    print(f'Check {filepath}')
+    with wave.open(filepath, "rb") as wave_file:
+        check_wave_file(wave_file)
+        data = wave_file.readframes(wave_file.getnframes())
+        wave_file.close()
+
+    return data
+
+
+def get_nb_of_samples(wave_file_data):
+    return len(wave_file_data) // 4
+
+
+def sign_extend_int16(value):
+    return (((value & 0xFFFF) + 0x8000) & 0xffff) - 0x8000
+
+
+def get_left_sample(wave_file_data, index):
+    sample_index = index * 4
+    # print(f'-=> L {index} : {wave_file_data[sample_index]:02x} {wave_file_data[sample_index + 1]:02x} {(((wave_file_data[sample_index + 1] << 8) | wave_file_data[sample_index]) & 0xFFFF):04x}')
+    return sign_extend_int16((wave_file_data[sample_index + 1] << 8) | wave_file_data[sample_index])
+
+
+def get_right_sample(wave_file_data, index):
+    sample_index = index * 4
+    # print(f'-=> R {index} : {wave_file_data[sample_index + 2]:02x} {wave_file_data[sample_index + 3]:02x} {(((wave_file_data[sample_index + 3] << 8) | wave_file_data[sample_index + 2]) & 0xFFFF):04x}')
+    return sign_extend_int16((wave_file_data[sample_index + 3] << 8) | wave_file_data[sample_index + 2])
+
+
+def get_left_sample_raw(wave_file_data, index):
+    sample_index = index * 4
+    return (wave_file_data[sample_index + 1] << 8) | wave_file_data[sample_index]
+
+
+def get_right_sample_raw(wave_file_data, index):
+    sample_index = index * 4
+    return (wave_file_data[sample_index + 3] << 8) | wave_file_data[sample_index + 2]
+
+
+def write_sample(wave_file_data, left_sample, right_sample):
+    if left_sample > 32767:
+        left_sample = 32767
+    if left_sample < -32768:
+        left_sample = -32768
+
+    left_sample &= 0xFFFF
+
+    wave_file_data.append(left_sample & 255)
+    wave_file_data.append(left_sample >> 8)
+
+    if right_sample > 32767:
+        right_sample = 32767
+    if right_sample < -32768:
+        right_sample = -32768
+
+    right_sample &= 0xFFFF
+
+    wave_file_data.append(right_sample & 255)
+    wave_file_data.append(right_sample >> 8)
+
+
+def write_wave_file(filepath, wave_file_data):
+    with wave.open(filepath, "wb") as wave_file:
+        wave_file.setnchannels(2)
+        wave_file.setsampwidth(2)
+        wave_file.setframerate(pymod.Module.render_test_sample_rate())
+        wave_file.writeframesraw(bytearray(wave_file_data))
+
+
 # -- List of modules to test
 modules_list = [
-    'arpeggio.mod', 'fineport.mod', 'nosamp.mod', 'port2.mod', 'tremolo.mod',
-    'delay.mod', 'fx.mod', 'offset.mod', 'port3.mod', 'vibwave.mod',
-    'delay2.mod', 'glissando.mod', 'offsetweird.mod', 'portfunny.mod', 'vol.mod',
-    'delaysim.mod', 'line.mod', 'pan.mod', 'position.mod', 'volslide.mod',
-    'filter.mod', 'loop.mod', 'patdelay.mod', 'pwm.mod', 'volslide2.mod',
-    'fine.mod', 'loud.mod', 'patloop2.mod', 'simpy.mod', 'volume2.mod',
-    'fine2.mod', 'nonexistence.mod', 'port1.mod', 'test.mod', 'weirdthing.mod',
-    'cuts.mod', 'ode2ptk.mod', 'wraparound.mod', 'wraparound2.mod', 'breaks.mod',
-    'breaks2.mod', 'volall.mod'
+    'arpeggio', 'fineport', 'nosamp', 'port2', 'tremolo',
+    'delay', 'fx', 'offset', 'port3', 'vibwave',
+    'delay2', 'glissando', 'offsetweird', 'portfunny', 'vol',
+    'delaysim', 'line', 'pan', 'position', 'volslide',
+    'filter', 'loop', 'patdelay', 'pwm', 'volslide2',
+    'fine', 'loud', 'patloop2', 'simpy', 'volume2',
+    'fine2', 'nonexistence', 'port1', 'test', 'weirdthing',
+    'cuts', 'ode2ptk', 'wraparound', 'wraparound2', 'breaks',
+    'breaks2', 'volall'
 ]
 
 
 # -- Tests
 @pytest.mark.parametrize("filename", modules_list)
 def test_render(filename, tmp_path):
-    module_filepath = os.path.join(sys.path[0], 'tests', 'modules', filename)
+    module_filepath = os.path.join(sys.path[0], 'tests', 'modules', f'{filename}.mod')
     assert os.path.exists(module_filepath)
 
-    wav_filename = os.path.splitext(filename)[0] + '.wav'
+    wav_filename = filename + '.wav'
     wav_filepath = os.path.join(sys.path[0], 'tests', 'wavs', wav_filename)
     assert os.path.exists(wav_filepath)
 
@@ -57,12 +139,64 @@ def test_render(filename, tmp_path):
     assert module is not None
 
     # -- This makes sure the random offset value used in some effect matches the one for the test files we compare against
-    random.seed(module.render_test_random_seed())
+    random.seed(pymod.Module.render_test_random_seed())
 
-    module.set_sample_rate(module.render_test_sample_rate())
+    module.set_sample_rate(pymod.Module.render_test_sample_rate())
     module.set_play_mode('stereo_hard')
     module.render_to(temp_file)
 
+    assert filecmp.cmp(wav_filepath, temp_file)
+
+    os.remove(temp_file)
+
+
+@pytest.mark.parametrize("filename", modules_list)
+def test_render_channels(filename, tmp_path):
+    module_filepath = os.path.join(sys.path[0], 'tests', 'modules', f'{filename}.mod')
+    assert os.path.exists(module_filepath)
+
+    temp_file_prefix = os.path.join(tmp_path, f'pymod-test-{filename}')
+    temp_file = temp_file_prefix + '_1.wav'
+
+    module = pymod.Module(module_filepath)
+    assert module is not None
+
+    # -- This makes sure the random offset value used in some effect matches the one for the test files we compare against
+    random.seed(pymod.Module.render_test_random_seed())
+
+    module.set_sample_rate(pymod.Module.render_test_sample_rate())
+    module.set_play_mode('stereo_hard')
+    module.render_to(temp_file, True)
+
+    # -- We mix all the resulting channels into one stereo file
+    channel_1_data = read_wave_file(temp_file_prefix + '_1.wav')
+    channel_2_data = read_wave_file(temp_file_prefix + '_2.wav')
+    channel_3_data = read_wave_file(temp_file_prefix + '_3.wav')
+    channel_4_data = read_wave_file(temp_file_prefix + '_4.wav')
+
+    mixed_data = []
+    for i in range(0, get_nb_of_samples(channel_1_data)):
+        channel_1_left = get_left_sample(channel_1_data, i)
+        channel_2_left = get_left_sample(channel_2_data, i)
+        channel_3_left = get_left_sample(channel_3_data, i)
+        channel_4_left = get_left_sample(channel_4_data, i)
+        mixed_left = channel_1_left + channel_2_left + channel_3_left + channel_4_left
+
+        channel_1_right = get_right_sample(channel_1_data, i)
+        channel_2_right = get_right_sample(channel_2_data, i)
+        channel_3_right = get_right_sample(channel_3_data, i)
+        channel_4_right = get_right_sample(channel_4_data, i)
+        mixed_right = channel_1_right + channel_2_right + channel_3_right + channel_4_right
+
+        write_sample(mixed_data, mixed_left, mixed_right)
+
+    temp_file = temp_file_prefix + '.wav'
+    write_wave_file(temp_file, mixed_data)
+
+    wav_filepath = os.path.join(sys.path[0], 'tests', 'wavs', f'{filename}.wav')
+    assert os.path.exists(wav_filepath)
+
+    # -- Mixed and generated version should match
     assert filecmp.cmp(wav_filepath, temp_file)
 
     os.remove(temp_file)
