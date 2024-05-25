@@ -1,7 +1,5 @@
 # Pymod
-An Amiga module player/renderer written in Python! It uses PyAudio for real-time playback, so you'll need to install PortAudio for it to work. The actual rendering routine only uses 2 of Python's standard libraries (Random and Time), but it can be adapted to work without.
-
-I've included a bunch of test modules that I made myself; they're free for anyone to use, for testing their players.
+An Amiga module player/renderer written in Python! It uses PyAudio for real-time playback, so you'll need to install PortAudio for it to work (more information below). I've included a bunch of test modules that I made myself; they're free for anyone to use, for testing their players.
 
 ## Features
 * *It can play "Ode to ProTracker" and "Black Queen" perfectly the whole way through!!*
@@ -9,22 +7,30 @@ I've included a bunch of test modules that I made myself; they're free for anyon
 * Rendering each channel to its own file
 * Real-time playback of modules, with a display of the pattern as it's being played
 * Support for modules with any number of channels, from 1 to 99
+* Support for modules with more than 65 patterns
 * Different playback modes (hard-panned stereo, "soft-panned" stereo, and mono)
 * Support for uncommon effects such as EFx (invert loop), E5x (set finetune) and 8xx/E8x (set panning)
 * An information display, including loop points, finetunes and sample names
+* A crude simulation of the Amiga's filter (E0x works here!)
 * Lots of ProTracker's behaviours are here, including:
     * Line breaks and position breaks together (reverse modules will play just fine)
     * Sample numbers on their own controlling the volume
     * Note cuts alongside sample numbers
     * The ProTracker sine table, used for vibrato and tremolo
     * Per-channel pattern loops
-    * The oddly specific sample offset behaviour (check the code for a description)
+    * The oddly specific sample offset behaviour
     * Portamentos and volume slides being unaffected by pattern delays
-    * Authentic arpeggio behaviour (period wraparound, "sample cutting" and missed notes)
     * Accurate "invert loop" implementation, using the patented ProTracker Funk Table&trade;
+* A legacy mode that enforces ProTracker 2.3's quirks, including:
+    * Vibrato and tremolo missing every first tick
+    * Authentic arpeggio behaviour (period wraparound, "sample cutting" and missed notes)
+    * Portamentos (and any out-of-range notes) constraining to ProTracker's period range
+    * No panning effects (8xx/E8x do nothing in legacy mode)
+    * 4 channel modules only
+* An extended note range for modules not made using ProTracker (two extra octaves!)
 
 ## Installation
-pymod requires at least [Python](https://python.org) 3.8. You can install it by installing [pip](https://packaging.python.org/en/latest/tutorials/installing-packages/) and typing the following in a terminal window:
+Pymod requires at least [Python](https://python.org) 3.8. You can install it by installing [pip](https://packaging.python.org/en/latest/tutorials/installing-packages/) and typing the following in a terminal window:
 
 ```console
 pip install pymod
@@ -37,7 +43,7 @@ brew install portaudio
 ```
 
 ## Usage
-pymod can be used to play a module from the command line:
+Pymod can be used to play a module from the command line:
 ```console
 pymod <options> <path to .mod file> <sample rate> <play mode>
 ```
@@ -55,7 +61,7 @@ pymod <options> <path to .mod file> <sample rate> <play mode>
     * `--verbose (-v)` : If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.
     * `--channels (-c)` : Renders each channel to its own file. If playing, this does nothing.
     * `--buffer <buffer size> (-b)` : Change the buffer size for realtime playback (default is 1024).
-    * `--quiet` : Shows absolutely no info while playing/rendering a module.
+    * `--quiet (-q)` : Shows absolutely no info while playing/rendering a module.
 
 Pymod can also be imported into your Python programs and used as a module:
 

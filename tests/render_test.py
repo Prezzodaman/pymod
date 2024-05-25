@@ -119,7 +119,8 @@ modules_list = [
     'fine', 'loud', 'patloop2', 'simpy', 'volume2',
     'fine2', 'nonexistence', 'port1', 'test', 'weirdthing',
     'cuts', 'ode2ptk', 'wraparound', 'wraparound2', 'breaks',
-    'breaks2', 'volall'
+    'breaks2', 'volall', 'arptimings', 'timestretch', 'arpdesync',
+    'extended', 'portlimit', 'loopchange'
 ]
 
 

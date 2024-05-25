@@ -42,6 +42,7 @@ def main():
         parser.add_argument("-c", "--channels", action="store_true", help="Renders each channel to its own file. If playing, this does nothing. The channel volume is reduced, so the result is identical when all channels are mixed together.")
         parser.add_argument("-b", "--buffer", type=int, default=pymod.Module.buffer_size_default(), help=f"Change the buffer size for realtime playback (default is {pymod.Module.buffer_size_default()})")
         parser.add_argument("-q", "--quiet", action="store_true", help="Shows absolutely no info while playing/rendering a module")
+        parser.add_argument("-le", "--legacy", action="store_true", help="Simulates the quirks of ProTracker 2.3")
         args = parser.parse_args()
 
         module = pymod.Module(args.input_file.name)
@@ -51,6 +52,7 @@ def main():
         module.set_verbose(args.verbose)
         module.set_buffer_size(args.buffer)
         module.set_quiet(args.quiet)
+        module.set_legacy(args.legacy)
 
         if module is not None:
             if args.render is not None:

@@ -23,34 +23,56 @@ import os
 
 from .__about__ import __version__
 
-# 2.0.0:
+# 1.1.0:
 #   General notes:
-#      Now version 2.0.0, because the entire codebase has changed, and lots of bugs have been fixed!
-#         Pymod is now a PyPI compatible module (!) and split into multiple source files
-#         The code no longer runs in a While loop - it can now be used in other programs and uses a significantly neater (and more sensible) object-oriented approach
+#      Pymod is now a PyPI compatible module (!) and split into multiple source files
+#      The code no longer runs in a While loop - it can now be used in other programs and uses a significantly neater (and more sensible) object-oriented approach
 #      More consistent syntax throughout the code
 #         Improved overall code quality (e.g. syntax that complies better to the PEP-8 standard, and usage of f-strings... finally...)
 #      Added a visual "loops" counter for command-line playback
 #      Added the current channel/loops when rendering without the verbose flag
 #      Added a quiet mode that gives no feedback when rendering (useful for batch renders)
-#      Removed a bunch of redundant, useless code involving rendering to individual channels
+#      Simplified the way channels are rendered individually
 #      Prevented file rendering to an extension other than .wav
+#      Added support for ProTracker modules with more than 64 patterns (see test module "howmanypatterns.mod")
+#         Order length is still limited to 128 patterns, but that's a constraint within ProTracker itself (longer orders are still technically possible)
+#      Added a "legacy" mode that simulates ProTracker 2.3's quirks (see below)
+#      Added an extended period table featuring 2 extra octaves, nabbed from TakeTracker (used by default)
+#      When rendering modules using the filter, each channel is filtered individually, instead of the sum
+#         The files SOUNDED okay, but because the overall sum was filtered, there were slight differences when comparing a mix of the rendered channels against a mixed file rendered by Pymod
 #
+#   Legacy mode:
+#      This page documents ProTracker's quirks extremely well and was used extensively as a reference: https://weaselaudiolib.sourceforge.net/TakeTracker-FastTracker-notes-and-format.html
+#      Arpeggios are now ProTracker accurate (see test modules "arptimings.mod")
+#         Arpeggio wraparounds are also accurate (see test modules "wraparound.mod", "wraparound2.mod" and "timestretch.mod") and only happen in legacy mode
+#         It's worth noting that when exploiting arpeggio wraparounds for the "cutting" effect, the period timing can be slightly off (see "arpdesync.mod", although if you compare it to different replayers, they're all slightly different!)
+#         BUT... in doing this, the duff note at the end of "ode2ptk.mod" is now present, which believe it or not, is technically the correct behaviour! (this only happens in legacy mode)
+#      Vibrato/tremolo waveforms now behave exactly as they do in ProTracker (using the default values on every first tick)
+#      Legacy mode uses the standard ProTracker period table instead
+#      Using a line break alongside a pattern delay will offset the specified line by 1 (see test module "delayskip.mod")
+#      Portamentos constrain to the "maximum" and "minimum" period values (see test module "portlimit.mod")
+#         They're ACTUALLY the maximum and minimum values of the default finetune, not overall. That's just ProTracker for you!
+
 #   Bugs fixed:
 #      Fixed a bug with note delays being greater than the ticks per line, resulting in the note still playing
 #      Fixed a bug with note cuts being greater than the ticks per line, resulting in any further notes cutting incorrectly
-#      Arpeggio wraparounds are now significantly more accurate (see test modules "wraparound.mod" and "wraparound2.mod")
-#         BUT... in doing this, the duff note at the end of "ode2ptk.mod" is now present, which believe it or not, is ProTracker accurate!
 #      Fixed a bug where a position breaking to itself wouldn't immediately count as a loop (fixes the test modules "delaysim.mod" and "breaks2.mod")
 #      Fixed file rendering to parent/subdirectories
 #      Fixed duplicate loops (test modules "line.mod", "simpy.mod" and "patdelay.mod" now loop properly)
 #
 #   To do:
-#      Investigate why rendering "ode2ptk.mod" to individual channels causes channels 2-4 to be slightly later, even though it's still rendering the module as usual
+#      Investigate why rendering "ode2ptk.mod" to individual channels causes channels 2, 3 and 4 to be slightly later, even though it's still rendering the module as usual
 #      Perhaps figure out a way of rendering only a few samples (small buffer size) at a time, allowing for real-time playback to be used alongside other Python code
 #      Add interpolated playback/rendering (processing the module at double the specified sample rate, then averaging the current and last bytes to reduce ringing)
 #         This will, of course, add lots of overhead when playing in real-time, so this is only to be considered...
 #      Calculate module rendering/playing progress (e.g. percentage rendered)
+#         This can be done by playing the module through with only the line/position breaking effects enabled, counting the amount of samples as the module plays
+#            Well... supposedly, anyway! I did a test run of this, and not only was it surprisingly slow, the resulting time was a little shorter than it should be
+#      Implement ProTracker's loop behaviour
+#         In ProTracker, a sample number by itself will change the currently looping sample. So if another sample number is encountered while a sample is looping, the loop of the other sample will be played (starting from its loop point) once the current one has reached the loop end point
+#         If a sample's loop starts at 0, it should first play through all the way (including after the loop end) before playing the looped section
+#         At present, only the loop for a sample changes (the currently playing sample remains), and the change is immediate
+#         See the test module "loopchange.mod" for a demonstration of this behaviour
 
 # 1.0.1:
 #   Bugs fixed:
@@ -64,43 +86,162 @@ class Module:
     """Python class that plays/renders ProTracker modules using PyAudio."""
 
     # -- Class Variables
-    _mod_periods = [
+
+    # extended periods nabbed from a taketracker module :D
+    # 2 extra octaves, one below the lowest note, and one above the highest note!
+    _mod_extended_periods = [
+        # no finetune
+        [
+            1712, 1616, 1524, 1440, 1356, 1280, 1208, 1140, 1076, 1016, 960, 906,
+            856, 808, 762, 720, 678, 640, 604, 570, 538, 508, 480, 453,
+            428, 404, 381, 360, 339, 320, 302, 285, 269, 254, 240, 226,
+            214, 202, 190, 180, 170, 160, 151, 143, 135, 127, 120, 113,
+            107, 101, 95, 90, 85, 80, 76, 72, 68, 64, 60, 56, 0
+        ],
+        [  # finetune +1
+            1700, 1604, 1514, 1430, 1348, 1274, 1202, 1134, 1070, 1010, 954, 900,
+            850, 802, 757, 715, 674, 637, 601, 567, 535, 505, 477, 450,
+            425, 401, 379, 357, 337, 318, 300, 284, 268, 253, 239, 225,
+            213, 201, 189, 179, 169, 159, 150, 142, 134, 126, 119, 113,
+            106, 100, 94, 89, 84, 79, 75, 71, 67, 63, 59, 56, 0
+        ],
+        [  # +2
+            1688, 1592, 1504, 1418, 1340, 1264, 1194, 1126, 1064, 1004, 948, 894,
+            844, 796, 752, 709, 670, 632, 597, 563, 532, 502, 474, 447,
+            422, 398, 376, 355, 335, 316, 298, 282, 266, 251, 237, 224,
+            211, 199, 188, 177, 167, 158, 149, 141, 133, 125, 118, 112,
+            105, 99, 93, 88, 83, 78, 74, 70, 66, 62, 59, 56, 0
+        ],
+        [  # +3
+            1676, 1582, 1492, 1408, 1330, 1256, 1184, 1118, 1056, 996, 940, 888,
+            838, 791, 746, 704, 665, 628, 592, 559, 528, 498, 470, 444,
+            419, 395, 373, 352, 332, 314, 296, 280, 264, 249, 235, 222,
+            209, 198, 187, 176, 166, 157, 148, 140, 132, 125, 118, 111,
+            104, 99, 93, 88, 83, 78, 74, 70, 66, 62, 59, 56, 0
+        ],
+        [  # +4
+            1664, 1570, 1482, 1398, 1320, 1246, 1176, 1110, 1048, 990, 934, 882,
+            832, 785, 741, 699, 660, 623, 588, 555, 524, 495, 467, 441,
+            416, 392, 370, 350, 330, 312, 294, 278, 262, 247, 233, 220,
+            208, 196, 185, 175, 165, 156, 147, 139, 131, 124, 117, 110,
+            104, 98, 92, 87, 82, 77, 73, 69, 65, 62, 58, 56, 0
+        ],
+        [  # +5
+            1652, 1558, 1472, 1388, 1310, 1238, 1168, 1102, 1040, 982, 926, 874,
+            826, 779, 736, 694, 655, 619, 584, 551, 520, 491, 463, 437,
+            413, 390, 368, 347, 328, 309, 292, 276, 260, 245, 232, 219,
+            206, 195, 184, 174, 164, 155, 146, 138, 130, 123, 116, 109,
+            103, 97, 92, 87, 82, 77, 73, 69, 65, 61, 58, 56, 0
+        ],
+        [  # +6
+            1640, 1548, 1460, 1378, 1302, 1228, 1160, 1094, 1032, 974, 920, 868,
+            820, 774, 730, 689, 651, 614, 580, 547, 516, 487, 460, 434,
+            410, 387, 365, 345, 325, 307, 290, 274, 258, 244, 230, 217,
+            205, 193, 183, 172, 163, 154, 145, 137, 129, 122, 115, 109,
+            102, 96, 91, 86, 81, 77, 72, 68, 64, 61, 57, 56, 0
+        ],
+        [  # +7
+            1628, 1536, 1450, 1368, 1292, 1220, 1150, 1086, 1026, 968, 914, 862,
+            814, 768, 725, 684, 646, 610, 575, 543, 513, 484, 457, 431,
+            407, 384, 363, 342, 323, 305, 288, 272, 256, 242, 228, 216,
+            204, 192, 181, 171, 161, 152, 144, 136, 128, 121, 114, 108,
+            102, 96, 90, 85, 80, 76, 72, 68, 64, 60, 57, 56, 0
+        ],
+        [  # -8
+            1814, 1712, 1616, 1524, 1440, 1356, 1280, 1208, 1140, 1076, 1016, 960,
+            907, 856, 808, 762, 720, 678, 640, 604, 570, 538, 508, 480,
+            453, 428, 404, 381, 360, 339, 320, 302, 285, 269, 254, 240,
+            226, 214, 202, 190, 180, 170, 160, 151, 143, 135, 127, 120,
+            113, 107, 101, 95, 90, 85, 80, 75, 71, 67, 63, 60, 0
+        ],
+        [  # -7
+            1800, 1700, 1604, 1514, 1430, 1350, 1272, 1202, 1134, 1070, 1010, 954,
+            900, 850, 802, 757, 715, 675, 636, 601, 567, 535, 505, 477,
+            450, 425, 401, 379, 357, 337, 318, 300, 284, 268, 253, 238,
+            225, 212, 200, 189, 179, 169, 159, 150, 142, 134, 126, 119,
+            112, 106, 100, 94, 89, 84, 79, 75, 71, 67, 63, 59, 0
+        ],
+        [  # -6
+            1788, 1688, 1592, 1504, 1418, 1340, 1264, 1194, 1126, 1064, 1004, 948,
+            894, 844, 796, 752, 709, 670, 632, 597, 563, 532, 502, 474,
+            447, 422, 398, 376, 355, 335, 316, 298, 282, 266, 251, 237,
+            223, 211, 199, 188, 177, 167, 158, 149, 141, 133, 125, 118,
+            111, 105, 99, 94, 88, 83, 79, 74, 70, 66, 62, 59, 0
+        ],
+        [  # -5
+            1774, 1676, 1582, 1492, 1408, 1330, 1256, 1184, 1118, 1056, 996, 940,
+            887, 838, 791, 746, 704, 665, 628, 592, 559, 528, 498, 470,
+            444, 419, 395, 373, 352, 332, 314, 296, 280, 264, 249, 235,
+            222, 209, 198, 187, 176, 166, 157, 148, 140, 132, 125, 118,
+            111, 104, 99, 93, 88, 83, 78, 74, 70, 66, 62, 59, 0
+        ],
+        [  # -4
+            1762, 1664, 1570, 1482, 1398, 1320, 1246, 1176, 1110, 1048, 988, 934,
+            881, 832, 785, 741, 699, 660, 623, 588, 555, 524, 494, 467,
+            441, 416, 392, 370, 350, 330, 312, 294, 278, 262, 247, 233,
+            220, 208, 196, 185, 175, 165, 156, 147, 139, 131, 123, 117,
+            110, 104, 98, 92, 87, 82, 78, 73, 69, 65, 61, 58, 0
+        ],
+        [  # -3
+            1750, 1652, 1558, 1472, 1388, 1310, 1238, 1168, 1102, 1040, 982, 926,
+            875, 826, 779, 736, 694, 655, 619, 584, 551, 520, 491, 463,
+            437, 413, 390, 368, 347, 328, 309, 292, 276, 260, 245, 232,
+            219, 206, 195, 184, 174, 164, 155, 146, 138, 130, 123, 116,
+            109, 103, 97, 92, 86, 82, 77, 73, 69, 65, 61, 58, 0
+        ],
+        [  # -2
+            1736, 1640, 1548, 1460, 1378, 1302, 1228, 1160, 1094, 1032, 974, 920,
+            868, 820, 774, 730, 689, 651, 614, 580, 547, 516, 487, 460,
+            434, 410, 387, 365, 345, 325, 307, 290, 274, 258, 244, 230,
+            217, 205, 193, 183, 172, 163, 154, 145, 137, 129, 122, 115,
+            108, 102, 96, 91, 86, 81, 77, 72, 68, 64, 61, 57, 0
+        ],
+        [  # -1
+            1724, 1628, 1536, 1450, 1368, 1292, 1220, 1150, 1086, 1026, 968, 914,
+            862, 814, 768, 725, 684, 646, 610, 575, 543, 513, 484, 457,
+            431, 407, 384, 363, 342, 323, 305, 288, 272, 256, 242, 228,
+            216, 203, 192, 181, 171, 161, 152, 144, 136, 128, 121, 114,
+            108, 101, 96, 90, 85, 80, 76, 72, 68, 64, 60, 58, 0
+        ]
+    ]
+
+    _mod_legacy_periods = [
         [  # no finetune
             856, 808, 762, 720, 678, 640, 604, 570, 538, 508, 480, 453,
             428, 404, 381, 360, 339, 320, 302, 285, 269, 254, 240, 226,
             214, 202, 190, 180, 170, 160, 151, 143, 135, 127, 120, 113
         ],
-        [  # finetune  + 1
+        [  # finetune +1
             850, 802, 757, 715, 674, 637, 601, 567, 535, 505, 477, 450,
             425, 401, 379, 357, 337, 318, 300, 284, 268, 253, 239, 225,
             213, 201, 189, 179, 169, 159, 150, 142, 134, 126, 119, 113
         ],
-        [  # + 2
+        [  # +2
             844, 796, 752, 709, 670, 632, 597, 563, 532, 502, 474, 447,
             422, 398, 376, 355, 335, 316, 298, 282, 266, 251, 237, 224,
             211, 199, 188, 177, 167, 158, 149, 141, 133, 125, 118, 112
         ],
-        [  # + 3
+        [  # +3
             838, 791, 746, 704, 665, 628, 592, 559, 528, 498, 470, 444,
             419, 395, 373, 352, 332, 314, 296, 280, 264, 249, 235, 222,
             209, 198, 187, 176, 166, 157, 148, 140, 132, 125, 118, 111
         ],
-        [  # + 4
+        [  # +4
             832, 785, 741, 699, 660, 623, 588, 555, 524, 495, 467, 441,
             416, 392, 370, 350, 330, 312, 294, 278, 262, 247, 233, 220,
             208, 196, 185, 175, 165, 156, 147, 139, 131, 124, 117, 110
         ],
-        [  # + 5
+        [  # +5
             826, 779, 736, 694, 655, 619, 584, 551, 520, 491, 463, 437,
             413, 390, 368, 347, 328, 309, 292, 276, 260, 245, 232, 219,
             206, 195, 184, 174, 164, 155, 146, 138, 130, 123, 116, 109
         ],
-        [  # + 6
+        [  # +6
             820, 774, 730, 689, 651, 614, 580, 547, 516, 487, 460, 434,
             410, 387, 365, 345, 325, 307, 290, 274, 258, 244, 230, 217,
             205, 193, 183, 172, 163, 154, 145, 137, 129, 122, 115, 109
         ],
-        [  # + 7
+        [  # +7
             814, 768, 725, 684, 646, 610, 575, 543, 513, 484, 457, 431,
             407, 384, 363, 342, 323, 305, 288, 272, 256, 242, 228, 216,
             204, 192, 181, 171, 161, 152, 144, 136, 128, 121, 114, 108
@@ -147,7 +288,9 @@ class Module:
         ]
     ]
 
-    _mod_arp_period_cap = _mod_periods[0][-1]  # the highest note (lowest period) of the default finetune
+    _mod_arp_period_cap = _mod_legacy_periods[0][-1]  # the highest note (lowest period) of the default finetune
+    _mod_legacy_period_lowest = _mod_legacy_periods[0][-1]  # these aren't TECHNICALLY the highest and lowest... but according to protracker, they are
+    _mod_legacy_period_highest = _mod_legacy_periods[0][0]
 
     _mod_sine_table = [
         0, 24, 49, 74, 97, 120, 141, 161,
@@ -179,7 +322,8 @@ class Module:
             print("Error: This should be used on a local repo, not an installed module.")
             return
 
-        for filename in os.listdir(modules_folder):
+        test_modules = os.listdir(modules_folder)
+        for number, filename in enumerate(test_modules):
             module_file_path = os.path.join(modules_folder, filename)
             if not os.path.isfile(module_file_path) or not os.path.splitext(filename)[1] == ".mod":
                 continue
@@ -196,7 +340,7 @@ class Module:
             module.set_quiet(True)
 
             base_name = os.path.basename(module_file_path)
-            print(f"Rendering {base_name}...")
+            print(f"{number + 1}/{len(test_modules)}: Rendering {base_name}...")
             module.render_to(os.path.join(wavs_folder, os.path.splitext(filename)[0] + ".wav"))
 
     @classmethod
@@ -207,28 +351,52 @@ class Module:
             return 0
 
     @classmethod
-    def _mod_get_period_note(cls, period):  # returns the note value
+    def _mod_get_period_note(cls, period, legacy):  # returns the note value
         note = -1
         found = False
-        for period_set in Module._mod_periods:
-            if period in period_set and not found:
-                note = period_set.index(period)
-                found = True
+        if legacy:
+            if period < Module._mod_legacy_period_lowest:
+                period = Module._mod_legacy_period_lowest
+            elif period > Module._mod_legacy_period_highest:
+                period = Module._mod_legacy_period_highest
+            for period_set in Module._mod_legacy_periods:
+                if period in period_set and not found:
+                    note = period_set.index(period)
+                    found = True
+        else:
+            for period_set in Module._mod_extended_periods:
+                if period in period_set and not found:
+                    note = period_set.index(period)
+                    found = True
+                if period + 1 in period_set and not found:  # i need to find a better way of doing this :D
+                    note = period_set.index(period + 1)
+                    found = True
+                if period - 1 in period_set and not found:
+                    note = period_set.index(period - 1)
+                    found = True
         return note
 
     @classmethod
-    def _mod_get_finetune_period(cls, period, finetune):
-        period_found = Module._mod_periods[finetune][Module._mod_get_period_note(period)]
-        if period_found < Module._mod_arp_period_cap:
-            period_found = Module._mod_arp_period_cap
+    def _mod_get_finetune_period(cls, period, finetune, legacy):
+        if legacy:
+            period_found = Module._mod_legacy_periods[finetune][Module._mod_get_period_note(period, legacy)]
+            if period_found < Module._mod_arp_period_cap:
+                period_found = Module._mod_arp_period_cap
+        else:
+            period_found = Module._mod_extended_periods[finetune][Module._mod_get_period_note(period, legacy)]
         return period_found
 
     @classmethod
-    def _mod_get_closest_period(cls, period, finetune):
+    def _mod_get_closest_period(cls, period, finetune, legacy):
         differences = []
-        for period_2 in Module._mod_periods[finetune]:
-            differences.append(abs(period - period_2))
-        return Module._mod_periods[finetune][differences.index(min(differences))]
+        if legacy:
+            for period_2 in Module._mod_legacy_periods[finetune]:
+                differences.append(abs(period - period_2))
+            return Module._mod_legacy_periods[finetune][differences.index(min(differences))]
+        else:
+            for period_2 in Module._mod_extended_periods[finetune]:
+                differences.append(abs(period - period_2))
+            return Module._mod_extended_periods[finetune][differences.index(min(differences))]
 
     @classmethod
     def _get_panned_bytes(cls, byte, pan):  # expects an unsigned byte between 0 and 65535. pan value is between -1 and 1 (left and right)
@@ -258,8 +426,11 @@ class Module:
         return 23
 
     # -- Instance Methods
-    def __init__(self, input_file_path, sample_rate=44100, play_mode="mono", verbose=False, quiet=False):
+    def __init__(self, input_file_path, sample_rate=44100, play_mode="mono", verbose=False, quiet=False, legacy=False):
         """Constructor based on command line arguments."""
+
+        self._mod_tempo = 125
+        self._mod_ticks = 6
 
         self._input_file = input_file_path
         self._sample_rate = sample_rate
@@ -270,6 +441,7 @@ class Module:
         self._verbose = verbose
         self._buffer_size = Module.buffer_size_default()
         self._quiet = quiet  # this only affects the program's "introduction", playback and rendering - showing module info will still work
+        self._legacy = legacy
 
     # https://modarchive.org/forums/index.php?topic=2709.0
     def _mod_get_tempo_length(self):
@@ -282,6 +454,8 @@ class Module:
         self._mod_tempo = 125
         self._mod_ticks = 6
         self._loops = self._loops_init
+        if self._loops is None:
+            self._loops = 1
 
         if not self._quiet:
             print(f"Pymod v{__version__}")
@@ -300,14 +474,17 @@ class Module:
             mod_type += chr(mod_file[a])
         if mod_type == "M.K.":
             mod_channels = 4
-            mod_type_string = "ProTracker (or generic module tracker)"
-        if mod_type.endswith("CHN"):
+            mod_type_string = "ProTracker / Generic module tracker"
+        elif mod_type == "M!K!":
+            mod_channels = 4
+            mod_type_string = "ProTracker / Generic module tracker (65 or more patterns)"
+        elif mod_type.endswith("CHN"):
             try:
                 mod_channels = int(mod_type[:1])
                 mod_type_string = "Generic module tracker"
             except Exception:  # not an integer...
                 pass  # ...mod_channels will remain 0, and the appropriate error will be returned
-        if mod_type.endswith("CH"):
+        elif mod_type.endswith("CH"):
             try:
                 mod_channels = int(mod_type[:2])
                 mod_type_string = "Generic module tracker"
@@ -319,9 +496,6 @@ class Module:
                 mod_type_string = "TakeTracker"
             except Exception:
                 pass
-        mod_channels_adjusted = mod_channels
-        if mod_channels % 2 == 1 and mod_channels > 1:
-            mod_channels_adjusted += 1
 
         if mod_channels == 0:
             print("Error: Invalid module!")
@@ -338,6 +512,8 @@ class Module:
             print("Error: Output must be a .wav file!")
         elif self._render_file is None and self._render_channels:
             print("Error: The --channels/-c option can only be used alongside the --render/-r option!")
+        elif self._legacy and mod_type != "M.K.":
+            print("Error: Only 4 channel modules can be used in legacy mode!")
         else:
             stereo = self._play_mode.startswith("stereo")
             mod_lines = 64
@@ -435,8 +611,12 @@ class Module:
             else:
                 mod_note_names = []
                 mod_note_letters = ["C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-"]
-                for a in range(0, len(Module._mod_periods[0])):
-                    mod_note_names.append(mod_note_letters[a % len(mod_note_letters)] + str((a // 12) + 4))
+                if self._legacy:
+                    for a in range(0, len(Module._mod_legacy_periods[0])):
+                        mod_note_names.append(mod_note_letters[a % len(mod_note_letters)] + str((a // 12) + 4))
+                else:
+                    for a in range(0, len(Module._mod_extended_periods[0])):
+                        mod_note_names.append(mod_note_letters[a % len(mod_note_letters)] + str((a // 12) + 3))
 
                 file_finished = []
 
@@ -462,10 +642,14 @@ class Module:
                     # these are here, because when rendering channels, they need to be reset every time
                     mod_filter = self._play_mode.endswith("filter")  # a <crude> "simulation" of the amiga hardware filter (it's a simple one pole low-pass filter - literally just finding the difference between the current and last sum)
                     mod_filter_flag = mod_filter  # unlike mod_filter, this can't be changed
-                    mod_period_amount = len(Module._mod_periods[0])
+                    if self._legacy:
+                        mod_period_amount = len(Module._mod_legacy_periods[0])
+                    else:
+                        mod_period_amount = len(Module._mod_extended_periods[0])
 
-                    mod_channel_byte = [32768] * mod_channels_adjusted  # the current (unsigned) byte in each channel, summed together later on
-                    mod_channel_pan = [0] * mod_channels_adjusted  # -1  =  left, 0  =  centre, 1  =  right
+                    mod_channel_byte = [32768] * mod_channels  # the current (unsigned) byte in each channel, summed together later on
+                    mod_channel_byte_last = [32768] * mod_channels
+                    mod_channel_pan = [0] * mod_channels  # -1  =  left, 0  =  centre, 1  =  right
                     for a in range(0, mod_channels):
                         if self._play_mode.startswith("stereo_soft"):
                             if a % 4 == 1 or a % 4 == 2:
@@ -529,9 +713,11 @@ class Module:
                     mod_pattern_loop_counter = [0] * mod_channels  # counts down on every loop
                     mod_pattern_delay = 0  # if 0, there's no delay. if above 0, it counts down. the pattern only plays if this is 0 and mod_pattern_delay_finished is true
                     mod_pattern_delay_finished = True  # if this is false, it waits until the next line to stop advancing the mod pointer (without this flag, it would hang on whatever channel the effect was encountered on)
+                    mod_pattern_delay_encountered = False  # is there a pattern delay effect on the current line?
 
                     mod_next_position = 0
                     mod_next_line = 0
+                    mod_next_line_offset = False  # in protracker, using a pattern delay alongside a line break adds 1 to the line... for some reason
                     mod_position_break = False
                     mod_line_break = False
 
@@ -539,11 +725,9 @@ class Module:
                     mod_pointer = mod_pattern_offsets[mod_order[mod_order_position]]
                     mod_line = 0
                     mod_loops = 0  # different to the "loops" variable, this increases until it reaches "loops"
-                    # mod_ending = False  # set when the module's looped so many times
                     mod_bpm = 0  # calculated from the tempo and ticks/line (only used for a visual indicator)
 
                     sample_byte = 32768
-                    sample_byte_last = 32768
 
                     if self._render_channels:
                         while_condition = channel_current < mod_channels - 1
@@ -576,6 +760,7 @@ class Module:
                                     rendering_string = f"Rendering order {mod_order_position}/{mod_song_length - 1}{loop_string}...   "
                                 print(rendering_string, end="\r")
 
+                            mod_pattern_delay_encountered = False
                             for channel in range(0, mod_channels):
                                 if mod_pattern_delay_finished:
                                     effect_number = mod_file[mod_pointer + 2] & 0xf  # ssssh copypasta
@@ -586,6 +771,9 @@ class Module:
                                         else:
                                             self._mod_tempo = effect_param
                                             mod_ms_per_tick = self._mod_get_tempo_length()
+                                    if effect_number == 0xe and effect_param >> 4 == 0xe and self._legacy:  # pattern delay and line breaks (should this be part of legacy mode?)
+                                        mod_next_line_offset = True
+                                        mod_pattern_delay_encountered = True
                                 mod_pointer += 4
                             mod_pointer -= 4 * mod_channels
 
@@ -626,7 +814,7 @@ class Module:
                                     if period > 0:
                                         if mod_tone_period[channel] > 0:
                                             mod_tone_sliding[channel] = True
-                                        mod_tone_period[channel] = Module._mod_get_finetune_period(period, mod_finetune_temp[channel])
+                                        mod_tone_period[channel] = Module._mod_get_finetune_period(period, mod_finetune_temp[channel], self._legacy)
                                     if mod_effect_param[channel] > 0:
                                         mod_tone_memory[channel] = mod_effect_param[channel]
 
@@ -707,10 +895,11 @@ class Module:
                                         if not mod_filter_flag:
                                             mod_filter = param % 2 == 0
                                     if effect == 0x8:  # set panning
-                                        if param == 15:
-                                            mod_channel_pan[channel] = 1
-                                        else:
-                                            mod_channel_pan[channel] = ((param - 8) / 8)
+                                        if not self._legacy:  # this effect isn't supported in protracker 2.3!
+                                            if param == 15:
+                                                mod_channel_pan[channel] = 1
+                                            else:
+                                                mod_channel_pan[channel] = ((param - 8) / 8)
 
                                 if sample_number > 0:  # is a sample playing?
                                     mod_invert_loop_counter[channel] = 0
@@ -736,39 +925,63 @@ class Module:
                                             mod_sample_position[channel] = 0
 
                                 if mod_effect_number[channel] != 0x3 and period > 0:  # if there's a slide before a period, this changes it before the slide so it slides to the correct period (slideperiodslideslideperiod)
-                                    mod_tone_period[channel] = Module._mod_get_finetune_period(period, mod_finetune_temp[channel])
+                                    mod_tone_period[channel] = Module._mod_get_finetune_period(period, mod_finetune_temp[channel], self._legacy)
                                 if mod_tone_period[channel] == 0 and period > 0:  # nothing to slide from, use the current period
                                     mod_tone_period[channel] = period
                                 if period > 0 and not mod_tone_sliding[channel] and mod_pattern_delay_finished:  # the period>0 fixes a bug related to pattern delays, if there's a period on the last channel, the period value will contain that, so without the check all channels will have the same period!
-                                    mod_period[channel] = Module._mod_get_finetune_period(period, mod_finetune_temp[channel])
+                                    mod_period[channel] = Module._mod_get_finetune_period(period, mod_finetune_temp[channel], self._legacy)
                                     mod_arp_period[channel] = period  # are you kidding me, that's all i had to do the entire time, i was faffing around and turns out i was trying to find the finetuned period of a finetuned period, SSCCHHHHEEEEE
                                 if mod_sample_volume[channel] > 64:
                                     mod_sample_volume[channel] = 64
 
                                 if mod_effect_number[channel] == 0x0:  # arpeggio
                                     if mod_effect_param[channel] > 0:  # 0 means ignore
-                                        period_note = Module._mod_get_period_note(mod_arp_period[channel])
-                                        if sample_number > 0:
-                                            sample_finetune = 0
+                                        mod_arp_counter[channel] = 0  # reset the counter every time the effect is encountered
+                                        period_note = Module._mod_get_period_note(mod_arp_period[channel], self._legacy)
+                                        sample_finetune_temp = sample_finetune
+                                        sample_finetune_temp_changed = False  # so the finetune isn't repeatedly increased
 
                                         if mod_effect_param[channel] >> 4 == 0:
-                                            mod_arp_periods[channel][1] = Module._mod_periods[sample_finetune][period_note]
-                                        else:
-                                            period_1 = (period_note + (mod_effect_param[channel] >> 4)) % (mod_period_amount + 1)
-                                            if period_1 > mod_period_amount - 1:
-                                                mod_arp_periods[channel][1] = 0
+                                            if self._legacy:
+                                                mod_arp_periods[channel][1] = Module._mod_legacy_periods[sample_finetune][period_note]
                                             else:
-                                                mod_arp_periods[channel][1] = Module._mod_periods[sample_finetune][period_1]
+                                                mod_arp_periods[channel][1] = Module._mod_extended_periods[sample_finetune][period_note]
+                                        else:
+                                            period_1 = period_note + (mod_effect_param[channel] >> 4)  # this actually contains the note number, not the period... ;) (the reason it's the period amount+1 is because there's like this extra "period" containing no note when arpeggiating, causing a "cutting" effect)
+                                            if period_1 == mod_period_amount:
+                                                mod_arp_periods[channel][1] = 0  # don't play the note at all
+                                            else:
+                                                if period_1 > mod_period_amount:
+                                                    sample_finetune_temp = (sample_finetune_temp + 1) % len(Module._mod_legacy_periods)  # when a wraparound occurs, the finetune is increased by one, because on the amiga, the period table is stored as one long list, so it reaches the lowest note of the finetune next to the one used with the current sample!
+                                                    sample_finetune_temp_changed = True
+                                                    period_1 -= mod_period_amount
+                                                if self._legacy:
+                                                    mod_arp_periods[channel][1] = Module._mod_legacy_periods[sample_finetune_temp][period_1]
+                                                else:
+                                                    mod_arp_periods[channel][1] = Module._mod_extended_periods[sample_finetune_temp][period_1]
 
                                         if mod_effect_param[channel] & 0xf == 0:
-                                            mod_arp_periods[channel][2] = Module._mod_periods[sample_finetune][period_note]
+                                            if self._legacy:
+                                                mod_arp_periods[channel][2] = Module._mod_legacy_periods[sample_finetune][period_note]  # still using the regular finetune for this, since the wraparound hasn't occured
+                                            else:
+                                                mod_arp_periods[channel][2] = Module._mod_extended_periods[sample_finetune][period_note]
                                         else:
-                                            period_2 = (period_note + (mod_effect_param[channel] & 0xf)) % (mod_period_amount + 1)
-                                            if period_2 > mod_period_amount - 1:
+                                            period_2 = period_note + (mod_effect_param[channel] & 0xf)
+                                            if period_2 == mod_period_amount:
                                                 mod_arp_periods[channel][2] = 0
                                             else:
-                                                mod_arp_periods[channel][2] = Module._mod_periods[sample_finetune][period_2]
-                                        mod_arp_periods[channel][0] = Module._mod_periods[sample_finetune][period_note]
+                                                if period_2 > mod_period_amount:
+                                                    if not sample_finetune_temp_changed:
+                                                        sample_finetune_temp = (sample_finetune_temp + 1) % len(Module._mod_legacy_periods)  # no need to set the flag here since it's the last of the 2 periods!
+                                                    period_2 -= mod_period_amount
+                                                if self._legacy:
+                                                    mod_arp_periods[channel][2] = Module._mod_legacy_periods[sample_finetune_temp][period_2]
+                                                else:
+                                                    mod_arp_periods[channel][2] = Module._mod_extended_periods[sample_finetune_temp][period_2]
+                                        if self._legacy:
+                                            mod_arp_periods[channel][0] = Module._mod_legacy_periods[sample_finetune][period_note]
+                                        else:
+                                            mod_arp_periods[channel][0] = Module._mod_extended_periods[sample_finetune][period_note]
                                     else:
                                         mod_arp_periods[channel][0] = 0
                                         mod_arp_periods[channel][1] = 0
@@ -785,8 +998,11 @@ class Module:
                                     mod_position_break = True
                                 if mod_effect_number[channel] == 0xd:  # line break
                                     mod_next_line = (((mod_effect_param[channel] >> 4) * 10) + (mod_effect_param[channel] & 0xf))
-                                    if mod_next_line > 64:
-                                        mod_next_line = 0
+                                    if mod_next_line_offset and mod_pattern_delay_encountered:  # this ensures the line addition only happens if the line break is ALONGSIDE a pattern delay
+                                        mod_next_line_offset = False
+                                        mod_next_line += 1
+                                        if mod_next_line > 64:
+                                            mod_next_line = 0
                                     mod_line_break = True
                                 if (mod_effect_number[channel] == 0xa or mod_effect_number[channel] == 0x5 or mod_effect_number[channel] == 0x6) and mod_pattern_delay_finished:  # volume slide/ + tone portamento/ + vibrato (volume slide doesn't have any memory)
                                     mod_volslide_fine[channel] = False
@@ -823,10 +1039,11 @@ class Module:
                                     memory = mod_tremolo_memory[channel]
 
                                 if mod_effect_number[channel] == 0x8:  # set panning
-                                    if mod_effect_param[channel] == 255:
-                                        mod_channel_pan[channel] = 1
-                                    else:
-                                        mod_channel_pan[channel] = (mod_effect_param[channel] - 128) / 128
+                                    if not self._legacy:  # this effect isn't supported in protracker 2.3!
+                                        if mod_effect_param[channel] == 255:
+                                            mod_channel_pan[channel] = 1
+                                        else:
+                                            mod_channel_pan[channel] = (mod_effect_param[channel] - 128) / 128
 
                                 if mod_raw_period[channel] > 0:  # if there's a period...
                                     if not mod_vibrato[channel]:  # ...and there's no vibrato...
@@ -865,14 +1082,18 @@ class Module:
                                 if mod_arp_periods[channel] != [0, 0, 0]:
                                     for a in range(0, 3):
                                         if mod_arp_periods[channel][a] > 0:  # if the period is 0, it'll be missed entirely (in _mod_get_frequency)
-                                            mod_arp_periods[channel][a] = Module._mod_get_finetune_period(mod_arp_periods[channel][a], mod_finetune_temp[channel])
+                                            mod_arp_periods[channel][a] = Module._mod_get_finetune_period(mod_arp_periods[channel][a], mod_finetune_temp[channel], self._legacy)
 
                                 if self._render_file is None:
                                     if self._verbose:
                                         note_name = "---"
-                                        note_number = Module._mod_get_period_note(mod_raw_period[channel])
-                                        if note_number >= 0:
-                                            note_name = mod_note_names[note_number]
+                                        note_number = Module._mod_get_period_note(mod_raw_period[channel], self._legacy)
+                                        if self._legacy:
+                                            if note_number >= 0 and note_number < mod_period_amount - 1:
+                                                note_name = mod_note_names[note_number]
+                                        else:
+                                            if note_number < mod_period_amount - 1:
+                                                note_name = mod_note_names[note_number]
                                         sample_number_string = str(sample_number).zfill(2)
                                         effect_string = hex(mod_effect_number[channel])[2:].upper() + " " + hex(mod_effect_param[channel])[2:].upper().zfill(2)
                                         line_string += f"{note_name} {sample_number_string} {effect_string}|"
@@ -881,6 +1102,8 @@ class Module:
 
                             if self._render_file is None:
                                 if self._verbose:
+                                    if self._loops > 1:
+                                        line_string += f" ({mod_loops+1}/{self._loops})"
                                     order_position_string = str(mod_order_position).zfill(3) + "/" + str(mod_song_length - 1).zfill(3)
                                     pattern_string = str(mod_order[mod_order_position]).zfill(3)
                                     line_number_string = str(mod_line).zfill(2)
@@ -899,12 +1122,10 @@ class Module:
                             mod_ticks_counter_actual_previous = 0
 
                             while mod_ticks_counter < mod_ms_per_tick * self._mod_ticks:
-                                channel_sum_last = (channel_sum + 32768) & 65535
-                                channel_sum_left_last = (channel_sum_left + 32768) & 65535
-                                channel_sum_right_last = (channel_sum_right + 32768) & 65535
                                 mod_ticks_counter_actual_previous = mod_ticks_counter_actual
                                 mod_ticks_counter_actual = int((mod_ticks_counter / (mod_ms_per_tick * self._mod_ticks)) * self._mod_ticks)
                                 for channel in range(0, mod_channels):
+                                    mod_channel_byte_last[channel] = mod_channel_byte[channel]
                                     if mod_ticks_counter_actual_previous != mod_ticks_counter_actual or mod_ticks_counter == 0:  # on every tick (including the first)
                                         fine_condition = mod_ticks_counter_actual > 0
                                         if mod_volslide_fine[channel]:
@@ -932,22 +1153,27 @@ class Module:
                                             else:
                                                 mod_period[channel] = mod_tone_period[channel]
 
+                                        if self._legacy:
+                                            if mod_period[channel] < Module._mod_legacy_period_lowest:
+                                                mod_period[channel] = Module._mod_legacy_period_lowest
+                                            if mod_period[channel] > Module._mod_legacy_period_highest:
+                                                mod_period[channel] = Module._mod_legacy_period_highest
                                         if mod_period[channel] > 0:
                                             if mod_glissando[channel]:
-                                                mod_frequency[channel] = Module._mod_get_frequency(Module._mod_get_closest_period(mod_period[channel], mod_samples[sample_number]["finetune"]))
+                                                mod_frequency[channel] = Module._mod_get_frequency(Module._mod_get_closest_period(mod_period[channel], mod_samples[sample_number]["finetune"], self._legacy))
                                             else:
-                                                if mod_arp_periods[channel] != [0, 0, 0]:
+                                                if mod_arp_periods[channel] == [0, 0, 0]:  # no arpeggio?
+                                                    if self._legacy and mod_ticks_counter_actual == 0:  # reset to base note on the first tick
+                                                        mod_frequency[channel] = Module._mod_get_frequency(mod_period[channel])
+                                                    else:
+                                                        mod_frequency[channel] = Module._mod_get_frequency(mod_period[channel] + mod_vibrato_offset[channel])
+                                                else:
                                                     if mod_arp_periods[channel][mod_arp_counter[channel]] > 0:
                                                         mod_frequency[channel] = Module._mod_get_frequency(mod_arp_periods[channel][mod_arp_counter[channel]])
                                                     else:
                                                         mod_frequency[channel] = 0
-                                                else:
-                                                    mod_frequency[channel] = Module._mod_get_frequency(mod_period[channel] + mod_vibrato_offset[channel])
                                         if mod_arp_periods[channel] != [0, 0, 0]:
-                                            if self._mod_ticks == 2:
-                                                mod_arp_counter[channel] += 2
-                                            elif self._mod_ticks > 2:
-                                                mod_arp_counter[channel] += 1
+                                            mod_arp_counter[channel] += 1
                                             if mod_arp_counter[channel] > 2:
                                                 mod_arp_counter[channel] = 0
 
@@ -958,7 +1184,7 @@ class Module:
                                             if mod_sample_position[channel] > mod_samples[sample_number]["length"] - 1:  # reached end of sample?
                                                 mod_sample_playing[channel] = False  # not looping, end sample
                                         else:  # sample is looping
-                                            if mod_sample_position[channel] > (mod_samples[sample_number]["loop_length"] + mod_samples[sample_number]["loop_start"]):  # reached loop point?
+                                            if mod_sample_position[channel] > mod_samples[sample_number]["loop_length"] + mod_samples[sample_number]["loop_start"]:  # reached loop point?
                                                 mod_sample_position[channel] -= mod_samples[sample_number]["loop_length"]  # loop back
                                                 # it's not possible to simply set the position to the loop start, because the sample stepping accuracy will be lost, especially with higher notes
 
@@ -994,14 +1220,15 @@ class Module:
                                             depth = memory & 0xf
                                             if wave_type == 0:  # sine
                                                 offset = (Module._mod_sine_table[counter] * depth) / 128
-                                            elif wave_type == 1:  # ramp down
+                                            if wave_type == 1:  # ramp down
                                                 offset = ((counter - 32) * 8 * depth) / 128
-                                            elif wave_type == 2:  # square
+                                            # the random waveform isn't implemented in protracker 2.3, square is used instead
+                                            if wave_type == 2 or (wave_type == 3 and self._legacy):  # square
                                                 offset = depth * 255
                                                 if counter > 31:
                                                     offset = 0 - offset
                                                 offset /= 128
-                                            elif wave_type == 3:  # random
+                                            if wave_type == 3 and not self._legacy:  # random
                                                 offset = random.randint(0 - depth, depth)
 
                                             if mod_vibrato[channel]:
@@ -1038,7 +1265,10 @@ class Module:
                                         if sample_byte_position > len(mod_file) - 1:
                                             sample_byte_position = len(mod_file) - 1
                                         sample_byte = (((mod_file[sample_byte_position] + 128) & 255) - 128) / 128
-                                        volume = mod_sample_volume[channel] + mod_tremolo_offset[channel]
+                                        if self._legacy and mod_ticks_counter_actual == 0:  # reset to base volume on the first tick
+                                            volume = mod_sample_volume[channel]
+                                        else:
+                                            volume = mod_sample_volume[channel] + mod_tremolo_offset[channel]
                                         if volume > 64:
                                             volume = 64
                                         if volume < 0:
@@ -1049,8 +1279,6 @@ class Module:
                                         mod_sample_position[channel] += sample_step_rate
                                     else:
                                         sample_byte = 32768
-                                        if sample_byte_last != 32768:
-                                            sample_byte_last = 32768
 
                                     mod_channel_byte[channel] = sample_byte
 
@@ -1059,16 +1287,19 @@ class Module:
                                 channel_sum_right = 0
                                 for counter, channel_byte in enumerate(mod_channel_byte):
                                     if stereo:
-                                        channel_byte_panned = Module._get_panned_bytes(channel_byte, mod_channel_pan[counter])
-                                        channel_sum_left += int(channel_byte_panned[0] * 2) + 32768
-                                        channel_sum_right += int(channel_byte_panned[1] * 2) + 32768
-
+                                        if mod_filter:
+                                            channel_byte_actual = (channel_byte + mod_channel_byte_last[counter]) // 2
+                                        else:
+                                            channel_byte_actual = channel_byte
+                                        channel_byte_panned = Module._get_panned_bytes(channel_byte_actual, mod_channel_pan[counter])
+                                        channel_sum_left += (channel_byte_panned[0] * 2) + 32768
+                                        channel_sum_right += (channel_byte_panned[1] * 2) + 32768
                                     else:
                                         channel_sum += channel_byte
 
                                 if stereo:
-                                    channel_sum_left //= mod_channels_adjusted
-                                    channel_sum_right //= mod_channels_adjusted
+                                    channel_sum_left //= mod_channels
+                                    channel_sum_right //= mod_channels
                                     if channel_sum_left > 65535:
                                         channel_sum_left = 65535
                                     if channel_sum_left < 0:
@@ -1078,14 +1309,7 @@ class Module:
                                     if channel_sum_right < 0:
                                         channel_sum_right = 0
                                 else:
-                                    channel_sum //= mod_channels_adjusted
-
-                                if mod_filter:
-                                    if stereo:
-                                        channel_sum_left = (channel_sum_left + channel_sum_left_last) // 2
-                                        channel_sum_right = (channel_sum_right + channel_sum_right_last) // 2
-                                    else:
-                                        channel_sum = (channel_sum + channel_sum_last) // 2
+                                    channel_sum //= mod_channels
 
                                 if stereo:
                                     channel_sum_left = (channel_sum_left + 32768) & 65535
@@ -1200,8 +1424,15 @@ class Module:
                             mod_line = mod_lines
                         mod_pointer = mod_pattern_offsets[mod_order[mod_order_position]]
 
-                    if not while_condition or (self._render_file is not None and self._render_channels):
-                        file_name = self._render_file if not self._render_channels else ".".join(self._render_file.split(".")[:-1])[:-2] + "_" + str(channel_current + 1) + "." + self._render_file.split(".")[-1]
+                    if (self._render_file is not None and not while_condition) or (self._render_file is not None and self._render_channels):
+                        if self._render_channels:
+                            dir_name = os.path.dirname(self._render_file)
+                            if dir_name != "":
+                                dir_name += "/"
+                            base_name = os.path.splitext(os.path.basename(self._render_file))[0][:-2]  # file name, minus the _1
+                            file_name = f"{dir_name}{base_name}_{channel_current + 1}.wav"
+                        else:
+                            file_name = self._render_file
                         with wave.open(file_name, "wb") as wave_file:
                             if stereo:
                                 wave_file.setnchannels(2)
@@ -1239,7 +1470,7 @@ class Module:
         self._sample_rate = rate
 
     def set_nb_of_loops(self, nb_of_loops):
-        self._init_loops = nb_of_loops
+        self._loops_init = nb_of_loops
 
     def set_play_mode(self, play_mode):
         self._play_mode = play_mode
@@ -1252,6 +1483,9 @@ class Module:
 
     def set_quiet(self, flag):
         self._quiet = flag
+
+    def set_legacy(self, flag):
+        self._legacy = flag
 
     def play(self):
         self._run()
