@@ -43,6 +43,7 @@ def main():
         parser.add_argument("-b", "--buffer", type=int, default=pymod.Module.buffer_size_default(), help=f"Change the buffer size for realtime playback (default is {pymod.Module.buffer_size_default()})")
         parser.add_argument("-q", "--quiet", action="store_true", help="Shows absolutely no info while playing/rendering a module")
         parser.add_argument("-le", "--legacy", action="store_true", help="Simulates the quirks of ProTracker 2.3")
+        parser.add_argument("-a", "--amplify", type=float, help="Amplifies playback by the specified factor (e.g. 1 for normal volume, 2 for double volume, 0.5 for half volume)")
         args = parser.parse_args()
 
         module = pymod.Module(args.input_file.name)
@@ -53,6 +54,7 @@ def main():
         module.set_buffer_size(args.buffer)
         module.set_quiet(args.quiet)
         module.set_legacy(args.legacy)
+        module.set_amplify(args.amplify)
 
         if module is not None:
             if args.render is not None:

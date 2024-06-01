@@ -13,21 +13,22 @@ An Amiga module player/renderer written in Python! It uses PyAudio for real-time
 * An information display, including loop points, finetunes and sample names
 * A crude simulation of the Amiga's filter (E0x works here!)
 * Lots of ProTracker's behaviours are here, including:
-    * Line breaks and position breaks together (reverse modules will play just fine)
-    * Sample numbers on their own controlling the volume
-    * Note cuts alongside sample numbers
-    * The ProTracker sine table, used for vibrato and tremolo
-    * Per-channel pattern loops
-    * The oddly specific sample offset behaviour
-    * Portamentos and volume slides being unaffected by pattern delays
-    * Accurate "invert loop" implementation, using the patented ProTracker Funk Table&trade;
+	* Line breaks and position breaks together (reverse modules will play just fine)
+	* Sample numbers on their own controlling the volume
+	* Note cuts alongside sample numbers
+	* The ProTracker sine table, used for vibrato and tremolo
+	* Per-channel pattern loops
+	* The oddly specific sample offset behaviour
+	* Portamentos and volume slides being unaffected by pattern delays
+	* Accurate "invert loop" implementation, using the patented ProTracker Funk Table&trade;
 * A legacy mode that enforces ProTracker 2.3's quirks, including:
-    * Vibrato and tremolo missing every first tick
-    * Authentic arpeggio behaviour (period wraparound, "sample cutting" and missed notes)
-    * Portamentos (and any out-of-range notes) constraining to ProTracker's period range
-    * No panning effects (8xx/E8x do nothing in legacy mode)
-    * 4 channel modules only
+	* Vibrato and tremolo missing every first tick
+	* Authentic arpeggio behaviour (period wraparound, "sample cutting" and missed notes)
+	* Portamentos (and any out-of-range notes) constraining to ProTracker's period range
+	* No panning effects (8xx/E8x do nothing in legacy mode)
+	* 4 channel modules only
 * An extended note range for modules not made using ProTracker (two extra octaves!)
+* Extra effects exclusive to Pymod
 
 ## Installation
 Pymod requires at least [Python](https://python.org) 3.8. You can install it by installing [pip](https://packaging.python.org/en/latest/tutorials/installing-packages/) and typing the following in a terminal window:
@@ -50,18 +51,19 @@ pymod <options> <path to .mod file> <sample rate> <play mode>
 
 - `sample rate` is the sample rate at which the module is played or rendered.
 - `play mode` can be one of the following:
-    * `info` : Just display info about the module.
-    * `text` : Display the module text (list of sample names where mod authors often hide info text).
-    * `mono` or `mono_filter` : play/render the module in mono. With or without filter enabled.
-    * `stereo_soft` or `stereo_soft_filter` : play/render the module with a soft/partial stereo separation (with or without filter enabled)
-    * `stereo_hard` or `stereo_hard_filter` : play/render the module with a hard stereo separation (with or without filter enabled)
+	* `info` : Just display info about the module.
+	* `text` : Display the module text (list of sample names where mod authors often hide info text).
+	* `mono` or `mono_filter` : Play/render the module in mono (with or without filter enabled)
+	* `stereo_soft` or `stereo_soft_filter` : Play/render the module with a soft/partial stereo separation (with or without filter enabled)
+	* `stereo_hard` or `stereo_hard_filter` : Play/render the module with a hard stereo separation (with or without filter enabled)
 - `options` can be:
-    * `--render=<path to wav file> (-r)` : Renders the module to a wave file. If rendering multiple channels, end the filename with _1 (e.g. pymod_1.wav) and the files will be numbered sequentially.
-    * `--loops=<number of loops> (-l)` : The amount of times to loop the module. If this option isn't specified, the module will play once.
-    * `--verbose (-v)` : If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.
-    * `--channels (-c)` : Renders each channel to its own file. If playing, this does nothing.
-    * `--buffer <buffer size> (-b)` : Change the buffer size for realtime playback (default is 1024).
-    * `--quiet (-q)` : Shows absolutely no info while playing/rendering a module.
+	* `--render <path to wav file> (-r)` : Renders the module to a wave file. If rendering multiple channels, end the filename with _1 (e.g. pymod_1.wav) and the files will be numbered sequentially.
+	* `--loops <number of loops> (-l)` : The amount of times to loop the module. If this option isn't specified, the module will play once.
+	* `--verbose (-v)` : If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.
+	* `--channels (-c)` : Renders each channel to its own file. If playing, this does nothing.
+	* `--buffer <buffer size> (-b)` : Change the buffer size for realtime playback (default is 1024).
+	* `--quiet (-q)` : Shows absolutely no info while playing/rendering a module.
+	* `--amplify <factor> (-a)` : Amplifies the output volume by a certain factor, useful for modules with lots of channels. 1 is normal volume, 2 is double volume, 0.5 is half volume, etc.
 
 Pymod can also be imported into your Python programs and used as a module:
 
@@ -71,7 +73,7 @@ import pymod
 module = pymod.Module(<path_to_mod_file>)
 
 if module is not None:
-    module.play()
+	module.play()
 ```
 
 or
@@ -82,7 +84,7 @@ import pymod
 module = pymod.Module(<path_to_mod_file>)
 
 if module is not None:
-    module.render_to(<path_to_wav_file_to_render_to>, <optional flag to render channels separately>)
+	module.render_to(<path_to_wav_file_to_render_to>, <optional flag to render channels separately>)
 ```
 
 The `Module` instance also has these methods:
@@ -93,8 +95,9 @@ The `Module` instance also has these methods:
 - `set_verbose(<flag>)` : If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.
 - `set_buffer_size(<size>)` : Change the buffer size for realtime playback (default is 1024).
 - `set_quiet(<flag>)` : If true, this shows absolutely no info while playing/rendering a module.
+- `set_amplify(<factor>)` : Amplifies the output volume by a certain factor.
 
-By default, the sample rate is 44100 Hz and the play mode is mono. These can be changed on init by specifying any one of the optional arguments `sample_rate`, `play_mode`. `verbose` or `quiet` can also be specified as arguments.
+By default, the sample rate is 44100 Hz and the play mode is mono. These can be changed on init by specifying the optional arguments `sample_rate` and `play_mode`. `verbose`, `quiet` and `amplify` can also be specified as arguments.
 
 ## Unit testing
 Unit tests can be run by using `pytest`. These tests run against a set of pre-generated wav files to make sure that the output is consistent across changes.
@@ -109,11 +112,11 @@ pymod.Module._generateTestFiles()
 ```
 
 ## Remarks
-* Rendering can be quite slow ("Ode to ProTracker" at 48k in mono takes 23 seconds), but during real-time playback, it's fast enough, unless the module has lots of channels.
-* The sample rate has a surprising effect on the quality of samples! Higher sample rates will sound better, but it'll use a lot more processing time. 48000 Hz is recommended!
+* Rendering/playback can be quite slow, but it's fast enough during real-time playback, unless the module has lots of channels. If there's noticable jitter, use the --buffer/-b option to change the buffer size.
+* The sample rate has a surprising effect on the quality of samples! Higher sample rates will sound better, but it'll use a lot more processing time.
 * The filter "simulation" is far from perfect; it's very subtle, but it's there. I have no plans to make it accurate, as E0x is almost never used. It's only here for the sake of completion!
 * Rendering channels individually will take much longer. For example, a 4 channel module will take 4x as long, as it goes through the whole module for each channel. It's done this way so it uses less RAM, instead of storing all the channels at once.
-	* The individual files will be at the same volume as if playing a module normally.
+	* The individual files will be at the same volume as if playing a module normally, so when mixed together, the result will be identical!
 
 ## Supported effects
 * **0xy** - Arpeggio
@@ -146,6 +149,11 @@ pymod.Module._generateTestFiles()
 * **EDx** - Note delay
 * **EEx** - Pattern delay
 * **EFx** - Invert loop
+
+## Pymod exclusive effects
+Note: in legacy mode, these will do nothing!
+* **E02** - Channel bass filter on
+* **E03** - Channel bass filter off
 
 ## Thanks
 * **The developers of OpenMPT** - For getting me started tracking way back in 2016, and making the one piece of software I use every day for all of my music (I owe a lot to you!)

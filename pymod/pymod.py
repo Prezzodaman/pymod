@@ -23,63 +23,6 @@ import os
 
 from .__about__ import __version__
 
-# 1.1.0:
-#   General notes:
-#      Pymod is now a PyPI compatible module (!) and split into multiple source files
-#      The code no longer runs in a While loop - it can now be used in other programs and uses a significantly neater (and more sensible) object-oriented approach
-#      More consistent syntax throughout the code
-#         Improved overall code quality (e.g. syntax that complies better to the PEP-8 standard, and usage of f-strings... finally...)
-#      Added a visual "loops" counter for command-line playback
-#      Added the current channel/loops when rendering without the verbose flag
-#      Added a quiet mode that gives no feedback when rendering (useful for batch renders)
-#      Simplified the way channels are rendered individually
-#      Prevented file rendering to an extension other than .wav
-#      Added support for ProTracker modules with more than 64 patterns (see test module "howmanypatterns.mod")
-#         Order length is still limited to 128 patterns, but that's a constraint within ProTracker itself (longer orders are still technically possible)
-#      Added a "legacy" mode that simulates ProTracker 2.3's quirks (see below)
-#      Added an extended period table featuring 2 extra octaves, nabbed from TakeTracker (used by default)
-#      When rendering modules using the filter, each channel is filtered individually, instead of the sum
-#         The files SOUNDED okay, but because the overall sum was filtered, there were slight differences when comparing a mix of the rendered channels against a mixed file rendered by Pymod
-#
-#   Legacy mode:
-#      This page documents ProTracker's quirks extremely well and was used extensively as a reference: https://weaselaudiolib.sourceforge.net/TakeTracker-FastTracker-notes-and-format.html
-#      Arpeggios are now ProTracker accurate (see test modules "arptimings.mod")
-#         Arpeggio wraparounds are also accurate (see test modules "wraparound.mod", "wraparound2.mod" and "timestretch.mod") and only happen in legacy mode
-#         It's worth noting that when exploiting arpeggio wraparounds for the "cutting" effect, the period timing can be slightly off (see "arpdesync.mod", although if you compare it to different replayers, they're all slightly different!)
-#         BUT... in doing this, the duff note at the end of "ode2ptk.mod" is now present, which believe it or not, is technically the correct behaviour! (this only happens in legacy mode)
-#      Vibrato/tremolo waveforms now behave exactly as they do in ProTracker (using the default values on every first tick)
-#      Legacy mode uses the standard ProTracker period table instead
-#      Using a line break alongside a pattern delay will offset the specified line by 1 (see test module "delayskip.mod")
-#      Portamentos constrain to the "maximum" and "minimum" period values (see test module "portlimit.mod")
-#         They're ACTUALLY the maximum and minimum values of the default finetune, not overall. That's just ProTracker for you!
-
-#   Bugs fixed:
-#      Fixed a bug with note delays being greater than the ticks per line, resulting in the note still playing
-#      Fixed a bug with note cuts being greater than the ticks per line, resulting in any further notes cutting incorrectly
-#      Fixed a bug where a position breaking to itself wouldn't immediately count as a loop (fixes the test modules "delaysim.mod" and "breaks2.mod")
-#      Fixed file rendering to parent/subdirectories
-#      Fixed duplicate loops (test modules "line.mod", "simpy.mod" and "patdelay.mod" now loop properly)
-#
-#   To do:
-#      Investigate why rendering "ode2ptk.mod" to individual channels causes channels 2, 3 and 4 to be slightly later, even though it's still rendering the module as usual
-#      Perhaps figure out a way of rendering only a few samples (small buffer size) at a time, allowing for real-time playback to be used alongside other Python code
-#      Add interpolated playback/rendering (processing the module at double the specified sample rate, then averaging the current and last bytes to reduce ringing)
-#         This will, of course, add lots of overhead when playing in real-time, so this is only to be considered...
-#      Calculate module rendering/playing progress (e.g. percentage rendered)
-#         This can be done by playing the module through with only the line/position breaking effects enabled, counting the amount of samples as the module plays
-#            Well... supposedly, anyway! I did a test run of this, and not only was it surprisingly slow, the resulting time was a little shorter than it should be
-#      Implement ProTracker's loop behaviour
-#         In ProTracker, a sample number by itself will change the currently looping sample. So if another sample number is encountered while a sample is looping, the loop of the other sample will be played (starting from its loop point) once the current one has reached the loop end point
-#         If a sample's loop starts at 0, it should first play through all the way (including after the loop end) before playing the looped section
-#         At present, only the loop for a sample changes (the currently playing sample remains), and the change is immediate
-#         See the test module "loopchange.mod" for a demonstration of this behaviour
-
-# 1.0.1:
-#   Bugs fixed:
-#      Partially fixed an offset issue with "ode2ptk.mod" when rendering individual channels
-#      Kept the volume identical when rendering individual channels
-#      Fixed an issue when using the --channels/-c option and not rendering, causing the module to play indefinitely
-
 
 # -- Classes
 class Module:
@@ -310,13 +253,16 @@ class Module:
 
     # -- Class Methods
     @classmethod
-    def _generateTestFiles(cls):
-        """Generate all the test files used to compare against in the uniot tests.
+    def _generateTestFiles(cls, keep_old_wavs=False):
+        """Generate all the test files used to compare against in the unit tests.
            This should only be used in a local repo and not with an installed module."""
 
         source_folder = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
         modules_folder = os.path.join(source_folder, "tests", "modules")
         wavs_folder = os.path.join(source_folder, "tests", "wavs")
+        if keep_old_wavs:
+            os.rename(wavs_folder, os.path.join(source_folder, "tests", "wavs_old"))
+            os.mkdir(wavs_folder)
 
         if not os.path.exists(modules_folder) or not os.path.exists(wavs_folder):
             print("Error: This should be used on a local repo, not an installed module.")
@@ -426,7 +372,7 @@ class Module:
         return 23
 
     # -- Instance Methods
-    def __init__(self, input_file_path, sample_rate=44100, play_mode="mono", verbose=False, quiet=False, legacy=False):
+    def __init__(self, input_file_path, sample_rate=44100, play_mode="mono", verbose=False, quiet=False, legacy=False, amplify=1):
         """Constructor based on command line arguments."""
 
         self._mod_tempo = 125
@@ -442,20 +388,20 @@ class Module:
         self._buffer_size = Module.buffer_size_default()
         self._quiet = quiet  # this only affects the program's "introduction", playback and rendering - showing module info will still work
         self._legacy = legacy
+        self._amplify = amplify
 
     # https://modarchive.org/forums/index.php?topic=2709.0
     def _mod_get_tempo_length(self):
         return (2500 / self._mod_tempo) * (self._sample_rate / 1000)
 
     def _run(self):
-        if self._input_file is None:
-            print("Error: Missing module filename!")
-
         self._mod_tempo = 125
         self._mod_ticks = 6
         self._loops = self._loops_init
         if self._loops is None:
             self._loops = 1
+        if self._amplify is None:
+            self._amplify = 1
 
         if not self._quiet:
             print(f"Pymod v{__version__}")
@@ -512,7 +458,7 @@ class Module:
             print("Error: Output must be a .wav file!")
         elif self._render_file is None and self._render_channels:
             print("Error: The --channels/-c option can only be used alongside the --render/-r option!")
-        elif self._legacy and mod_type != "M.K.":
+        elif self._legacy and (mod_type != "M.K." and mod_type != "M!K!"):
             print("Error: Only 4 channel modules can be used in legacy mode!")
         else:
             stereo = self._play_mode.startswith("stereo")
@@ -640,7 +586,7 @@ class Module:
                     mod_jumps = [[0, 0]]
                     mod_orders_visited = []
                     # these are here, because when rendering channels, they need to be reset every time
-                    mod_filter = self._play_mode.endswith("filter")  # a <crude> "simulation" of the amiga hardware filter (it's a simple one pole low-pass filter - literally just finding the difference between the current and last sum)
+                    mod_filter = self._play_mode.endswith("filter")  # a <crude> "simulation" of the amiga hardware filter (it's a simple one pole low-pass filter - literally just finding the difference between the current and last byte)
                     mod_filter_flag = mod_filter  # unlike mod_filter, this can't be changed
                     if self._legacy:
                         mod_period_amount = len(Module._mod_legacy_periods[0])
@@ -648,9 +594,14 @@ class Module:
                         mod_period_amount = len(Module._mod_extended_periods[0])
 
                     mod_channel_byte = [32768] * mod_channels  # the current (unsigned) byte in each channel, summed together later on
-                    mod_channel_byte_last = [32768] * mod_channels
-                    mod_channel_pan = [0] * mod_channels  # -1  =  left, 0  =  centre, 1  =  right
+                    mod_filter_order = 64  # trying to keep the value somewhat low so it renders/plays faster (for the standard filter, only the first byte of mod_channel_byte_last is used)
+                    mod_channel_byte_last_temp = []
+                    for a in range(0, mod_filter_order):
+                        mod_channel_byte_last_temp.append(32768)
+                    mod_channel_byte_last = []
+                    mod_channel_pan = [0] * mod_channels  # -1 = left, 0 = centre, 1 = right
                     for a in range(0, mod_channels):
+                        mod_channel_byte_last.append(mod_channel_byte_last_temp.copy())
                         if self._play_mode.startswith("stereo_soft"):
                             if a % 4 == 1 or a % 4 == 2:
                                 mod_channel_pan[a] = 0.5
@@ -668,7 +619,9 @@ class Module:
                     mod_sample_volume = [0] * mod_channels
 
                     mod_period = [0] * mod_channels
+                    mod_next_period = [0] * mod_channels  # used for protracker's note delay behaviour with looped samples (this will contain the actual current period, but it won't play it until the note delay is reached)
                     mod_raw_period = [0] * mod_channels
+                    mod_raw_period_inc_delay = [0] * mod_channels  # raw period + pattern delay (so when a pattern is being delayed, there's still a period number in this variable... mod_raw_period would contain 0 in this case)
                     mod_frequency = [0] * mod_channels
                     mod_effect_number = [0] * mod_channels
                     mod_effect_param = [0] * mod_channels
@@ -696,12 +649,14 @@ class Module:
                     mod_tremolo_wave = [0] * mod_channels
                     mod_tremolo_retrigger = [True] * mod_channels
                     mod_retrig_speed = [0] * mod_channels
-                    mod_retrig_counter = [0] * mod_channels
                     mod_invert_loop_counter = [0] * mod_channels  # 0  =  no inversion
                     mod_invert_loop_position = [0] * mod_channels
                     mod_invert_loop_speed = [0] * mod_channels
                     mod_finetune_temp = [0] * mod_channels  # for the "set finetune" effect, which doesn't directly affect the sample. if there's no effect, this'll contain the default finetune, otherwise, it'll be overridden. this is used when finding the frequency based on the period values, so it's actually very important!
                     mod_glissando = [False] * mod_channels
+                    mod_bass_channel = [False] * mod_channels  # pymod exclusive feature!!! use the effect e02 on a channel with bass sounds on it (e.g. bass drums or sub basses) to remove the ringing :D (e03 turns the bass filter off)
+                    mod_loop_play_full = [False] * mod_channels  # if this is false, the sample's loop will play as expected. if the sample is looping but the loop starts at 0, this will be true, meaning the whole sample will have to play through before looping
+                    mod_sample_number_cued = [0] * mod_channels
 
                     mod_tone_memory = [0] * mod_channels
                     mod_offset_memory = [0] * mod_channels
@@ -788,6 +743,7 @@ class Module:
                                 if mod_pattern_delay_finished:
                                     period = ((mod_file[mod_pointer] & 0xf) << 8) + mod_file[mod_pointer + 1]  # the period can be changed, even if there's no sample number
                                     mod_raw_period[channel] = period
+                                    mod_raw_period_inc_delay[channel] = period
                                     sample_number = (mod_file[mod_pointer] & 0xf0) + (mod_file[mod_pointer + 2] >> 4)
                                     mod_port_amount[channel] = 0
                                     mod_volslide_amount[channel] = 0
@@ -800,7 +756,6 @@ class Module:
                                 # portamento effects MUST be handled here!
                                 # otherwise the periods won't be correct (the periods are updated in the code after this)
                                 # that's because with the tone portamento, it uses the LAST period as the period to slide from, and then the current period is grabbed after that
-                                # the normal slide up/down is still here, for consistency ;)
                                 if mod_effect_number[channel] == 0x1:  # slide up
                                     mod_port_amount[channel] = mod_effect_param[channel]
                                     mod_port_fine[channel] = False
@@ -818,7 +773,8 @@ class Module:
                                     if mod_effect_param[channel] > 0:
                                         mod_tone_memory[channel] = mod_effect_param[channel]
 
-                                mod_retrig_counter[channel] = -1  # -1 means no retrig
+                                if mod_pattern_delay_finished:
+                                    mod_retrig_speed[channel] = 0
 
                                 if sample_number > 0:  # finetune check...
                                     mod_finetune_temp[channel] = mod_samples[sample_number - 1]["finetune"]
@@ -866,13 +822,12 @@ class Module:
                                         mod_port_amount[channel] = 0 - param
                                         mod_port_fine[channel] = True
                                     if effect == 0x9:  # note retrigger
-                                        mod_retrig_speed[channel] = param
-                                        mod_retrig_counter[channel] = 0
-                                        mod_sample_playing[channel] = True  # samples retrigger on the note... retrigger... effect.
-                                        mod_sample_position[channel] = 0
-                                    if effect == 0x5:  # set finetune
                                         if param > 0:
-                                            mod_finetune_temp[channel] = param
+                                            mod_retrig_speed[channel] = param
+                                            mod_sample_playing[channel] = True
+                                            mod_sample_position[channel] = 0
+                                    if effect == 0x5:  # set finetune
+                                        mod_finetune_temp[channel] = param
                                     if effect == 0xf:  # invert loop
                                         if param == 0:
                                             mod_invert_loop_speed[channel] = 0
@@ -882,7 +837,7 @@ class Module:
                                     if effect == 0xe:  # pattern delay:
                                         mod_pattern_delay = param
                                     wave_type = param % 4
-                                    wave_retrigger = (param % 8) // 4 == 0
+                                    wave_retrigger = param % 8 < 4
                                     if effect == 0x4:  # vibrato wave type
                                         mod_vibrato_wave[channel] = wave_type
                                         mod_vibrato_retrigger[channel] = wave_retrigger
@@ -893,29 +848,45 @@ class Module:
                                         mod_glissando[channel] = param > 0
                                     if effect == 0x0:  # filter on/off
                                         if not mod_filter_flag:
-                                            mod_filter = param % 2 == 0
+                                            if self._legacy or (not self._legacy and param < 2):
+                                                mod_filter = param % 2 == 0
                                     if effect == 0x8:  # set panning
                                         if not self._legacy:  # this effect isn't supported in protracker 2.3!
                                             if param == 15:
                                                 mod_channel_pan[channel] = 1
                                             else:
                                                 mod_channel_pan[channel] = ((param - 8) / 8)
+                                    if effect == 0x0 and not self._legacy:  # pymod exclusive effects
+                                        if param == 2:  # bass channel filter on
+                                            mod_bass_channel[channel] = True
+                                        elif param == 3:  # bass channel filter off
+                                            mod_bass_channel[channel] = False
 
                                 if sample_number > 0:  # is a sample playing?
                                     mod_invert_loop_counter[channel] = 0
                                     if mod_samples[sample_number - 1]["length"] > 0:
-                                        mod_sample_number[channel] = sample_number
+                                        mod_sample_number_cued[channel] = sample_number  # "cue up" the next sample
+                                        if mod_samples[sample_number - 1]["loop_start"] == 0 and mod_samples[sample_number - 1]["loop_length"] > 2:  # is this sample looping and does the loop start at 0?
+                                            if not mod_sample_playing[channel]:  # is there no sample currently playing?
+                                                mod_loop_play_full[channel] = True  # the full sample must be played first
+                                        else:  # not looping
+                                            if not mod_sample_playing[channel]:
+                                                mod_loop_play_full[channel] = False  # idk if this is correct, half of the loop code is guess work and playing it by ear
+                                        if mod_sample_position[channel] == 0:  # sample hasn't played yet?
+                                            mod_sample_number[channel] = sample_number  # ...play it
                                     sample_number -= 1
                                     if mod_sample_number[channel] > 0 and mod_raw_period[channel] == 0:  # sample number, no period?
                                         if mod_note_delay_ticks[channel] == -1:  # if there's a note delay, the volume will be set once the counter reaches 0
-                                            mod_sample_volume[channel] = mod_samples[sample_number]["volume"]
-                                    else:  # sample number and period...
+                                            mod_sample_volume[channel] = mod_samples[sample_number]["volume"]  # TODO: this part is hideously unfinished! implement the correct behaviour (the openmpt test module "PTSwapEmpty.mod" doesn't play correctly)
+                                            # if a currently playing sample is looping, and the sample number is changed to an empty one/a sample with no loop, the loop of the previous sample should finish before ending entirely
+                                            # that doesn't happen right now :/
+                                    elif mod_sample_number[channel] > 0 and mod_raw_period[channel] > 0:  # sample number and period...
                                         mod_sample_offset[channel] = mod_samples[sample_number]["offset"]
                                         if not mod_tone_sliding[channel]:  # don't reset the sample position or volume if sliding notes
-                                            if mod_note_delay_ticks[channel] == -1:  # this'll always be -1 unless there's a note delay effect
+                                            if mod_note_delay_ticks[channel] == -1 or (mod_note_delay_ticks[channel] > 0 and mod_samples[sample_number]["loop_length"] > 2 and self._legacy):  # this'll always be -1 unless there's a note delay effect
                                                 mod_sample_playing[channel] = True
                                                 mod_sample_position[channel] = 0
-                                        if mod_note_delay_ticks[channel] == -1:
+                                        if mod_note_delay_ticks[channel] == -1 or (mod_note_delay_ticks[channel] > 0 and mod_samples[sample_number]["loop_length"] > 2 and self._legacy):
                                             mod_sample_volume[channel] = mod_samples[sample_number]["volume"]
                                     sample_number += 1
                                 elif sample_number == 0:  # no sample number...
@@ -923,13 +894,25 @@ class Module:
                                         if mod_note_delay_ticks[channel] == -1 and not mod_tone_sliding[channel]:
                                             mod_sample_playing[channel] = True
                                             mod_sample_position[channel] = 0
+                                if mod_raw_period[channel] > 0:  # period, regardless of sample number?
+                                    if mod_samples[mod_sample_number_cued[channel] - 1]["loop_start"] == 0:  # i seriously have no clue if this is correct
+                                        mod_loop_play_full[channel] = True  # a period will reset this flag
+                                    if mod_sample_number[channel] != mod_sample_number_cued[channel]:
+                                        mod_sample_offset[channel] = mod_samples[mod_sample_number_cued[channel] - 1]["offset"]
+                                        mod_sample_position[channel] = 0
+                                    mod_sample_number[channel] = mod_sample_number_cued[channel]
 
                                 if mod_effect_number[channel] != 0x3 and period > 0:  # if there's a slide before a period, this changes it before the slide so it slides to the correct period (slideperiodslideslideperiod)
+                                    # that comment continues to crack me up
                                     mod_tone_period[channel] = Module._mod_get_finetune_period(period, mod_finetune_temp[channel], self._legacy)
                                 if mod_tone_period[channel] == 0 and period > 0:  # nothing to slide from, use the current period
                                     mod_tone_period[channel] = period
                                 if period > 0 and not mod_tone_sliding[channel] and mod_pattern_delay_finished:  # the period>0 fixes a bug related to pattern delays, if there's a period on the last channel, the period value will contain that, so without the check all channels will have the same period!
-                                    mod_period[channel] = Module._mod_get_finetune_period(period, mod_finetune_temp[channel], self._legacy)
+                                    mod_period_temp = Module._mod_get_finetune_period(period, mod_finetune_temp[channel], self._legacy)
+                                    if mod_note_delay_ticks[channel] == -1:
+                                        mod_period[channel] = mod_period_temp
+                                    else:
+                                        mod_next_period[channel] = mod_period_temp
                                     mod_arp_period[channel] = period  # are you kidding me, that's all i had to do the entire time, i was faffing around and turns out i was trying to find the finetuned period of a finetuned period, SSCCHHHHEEEEE
                                 if mod_sample_volume[channel] > 64:
                                     mod_sample_volume[channel] = 64
@@ -1001,8 +984,10 @@ class Module:
                                     if mod_next_line_offset and mod_pattern_delay_encountered:  # this ensures the line addition only happens if the line break is ALONGSIDE a pattern delay
                                         mod_next_line_offset = False
                                         mod_next_line += 1
-                                        if mod_next_line > 64:
+                                        if mod_next_line > 63:
                                             mod_next_line = 0
+                                            mod_order_position += 1
+                                        mod_orders_visited.append(mod_order_position)
                                     mod_line_break = True
                                 if (mod_effect_number[channel] == 0xa or mod_effect_number[channel] == 0x5 or mod_effect_number[channel] == 0x6) and mod_pattern_delay_finished:  # volume slide/ + tone portamento/ + vibrato (volume slide doesn't have any memory)
                                     mod_volslide_fine[channel] = False
@@ -1118,15 +1103,26 @@ class Module:
                                         print(f"Time elapsed: {time_elapsed_string}, Tempo: {self._mod_tempo}, Ticks/Line: {self._mod_ticks}, BPM: {'%g' % mod_bpm}, Order {mod_order_position}/{mod_song_length - 1}, Pattern {mod_order[mod_order_position]}, Line {(mod_line + 1)}{loops_string}        ", end="\r")
 
                             mod_ticks_counter = 0
-                            mod_ticks_counter_actual = 0  # the actual tick counter (e.g. by default this'll be from 0-6)
+                            mod_ticks_counter_actual = 0  # the actual tick counter (e.g. by default this'll be from 0-5)
                             mod_ticks_counter_actual_previous = 0
 
                             while mod_ticks_counter < mod_ms_per_tick * self._mod_ticks:
                                 mod_ticks_counter_actual_previous = mod_ticks_counter_actual
                                 mod_ticks_counter_actual = int((mod_ticks_counter / (mod_ms_per_tick * self._mod_ticks)) * self._mod_ticks)
                                 for channel in range(0, mod_channels):
-                                    mod_channel_byte_last[channel] = mod_channel_byte[channel]
+                                    mod_channel_byte_last[channel].insert(0, mod_channel_byte[channel])  # stores a "byte history" of sorts, inserting the last byte at the beginning, shifting the others over to the right
+                                    mod_channel_byte_last[channel] = mod_channel_byte_last[channel][:-1]  # remove the last element after insertion, keeping the list the same size
+
                                     if mod_ticks_counter_actual_previous != mod_ticks_counter_actual or mod_ticks_counter == 0:  # on every tick (including the first)
+                                        if mod_retrig_speed[channel] > 0:
+                                            if mod_ticks_counter_actual % mod_retrig_speed[channel] == 0:
+                                                if mod_raw_period_inc_delay[channel] > 0 and self._legacy:  # note alongside the retrigger?
+                                                    if mod_ticks_counter_actual > 0:  # miss the second occurence of the first tick
+                                                        mod_sample_playing[channel] = True
+                                                        mod_sample_position[channel] = 0
+                                                else:  # retrigger by itself?
+                                                    mod_sample_playing[channel] = True  # retrigger on all ticks
+                                                    mod_sample_position[channel] = 0
                                         fine_condition = mod_ticks_counter_actual > 0
                                         if mod_volslide_fine[channel]:
                                             fine_condition = mod_ticks_counter_actual == 0  # only fineslide on the first tick
@@ -1184,9 +1180,27 @@ class Module:
                                             if mod_sample_position[channel] > mod_samples[sample_number]["length"] - 1:  # reached end of sample?
                                                 mod_sample_playing[channel] = False  # not looping, end sample
                                         else:  # sample is looping
-                                            if mod_sample_position[channel] > mod_samples[sample_number]["loop_length"] + mod_samples[sample_number]["loop_start"]:  # reached loop point?
-                                                mod_sample_position[channel] -= mod_samples[sample_number]["loop_length"]  # loop back
-                                                # it's not possible to simply set the position to the loop start, because the sample stepping accuracy will be lost, especially with higher notes
+                                            if mod_loop_play_full[channel]:  # the current sample's loop begins at 0, play the whole thing first
+                                                if mod_sample_position[channel] > mod_samples[sample_number]["length"]:  # reached end?
+                                                    mod_loop_play_full[channel] = False  # sample has played in full
+                                                    if mod_samples[mod_sample_number_cued[channel] - 1]["loop_length"] <= 2:  # is the cued sample looping?
+                                                        mod_sample_playing[channel] = False  # if not, stop playback
+
+                                                    mod_sample_number[channel] = mod_sample_number_cued[channel]  # idk if this is technically correct
+                                                    mod_sample_offset[channel] = mod_samples[mod_sample_number_cued[channel] - 1]["offset"]
+                                                    mod_sample_position[channel] = mod_samples[mod_sample_number_cued[channel] - 1]["loop_start"]
+                                            else:  # sample has either played in full, or the loop begins after 0
+                                                if mod_sample_position[channel] > mod_samples[sample_number]["loop_length"] + mod_samples[sample_number]["loop_start"]:  # reached loop point?
+                                                    mod_sample_position[channel] -= mod_samples[sample_number]["loop_length"]  # loop back
+                                                    # it's not possible to simply set the position to the loop start, because the sample stepping accuracy will be lost, especially with higher notes
+                                                    if mod_sample_number[channel] != mod_sample_number_cued[channel]:  # reached the loop end... is the currently looping sample number different to the cued one?
+                                                        if mod_samples[mod_sample_number_cued[channel] - 1]["loop_length"] > 2:  # is the cued sample looping?
+                                                            mod_sample_number[channel] = mod_sample_number_cued[channel]
+                                                            mod_sample_offset[channel] = mod_samples[mod_sample_number_cued[channel] - 1]["offset"]
+                                                            mod_sample_position[channel] = mod_samples[mod_sample_number_cued[channel] - 1]["loop_start"]
+                                                        else:  # cued sample isn't looping, so stop playback altogether
+                                                            mod_sample_playing[channel] = False
+                                                            mod_sample_number[channel] = mod_sample_number_cued[channel]
 
                                     if mod_ticks_counter_actual_previous != mod_ticks_counter_actual:  # a tick has occured
                                         # because of the condition above, the first tick will be missed entirely, which is the correct behaviour
@@ -1201,12 +1215,6 @@ class Module:
                                                 sample_unsigned = ~sample_unsigned & 255  # find the bitwise not of the byte
                                                 sample_unsigned = (sample_unsigned + 128) & 255  # convert it back to signed
                                                 mod_file[mod_samples[sample_number]["offset"] + mod_invert_loop_position[channel]] = sample_unsigned
-                                        if mod_retrig_counter[channel] >= 0:
-                                            mod_retrig_counter[channel] += 1
-                                            if mod_retrig_counter[channel] == mod_retrig_speed[channel]:
-                                                mod_sample_playing[channel] = True
-                                                mod_sample_position[channel] = 0
-                                                mod_retrig_counter[channel] = 0
 
                                         if mod_vibrato[channel] or mod_tremolo[channel]:
                                             if mod_vibrato[channel]:
@@ -1249,10 +1257,14 @@ class Module:
                                         # if you put a sample number on the same line as a note cut, the volume will open up before being cut by the effect
                                         if mod_note_delay_ticks[channel] >= 0:  # note delayed?
                                             mod_note_delay_ticks[channel] -= 1
-                                            if mod_note_delay_ticks[channel] == 0:
+                                            if mod_note_delay_ticks[channel] == 0:  # note delay finished?
                                                 mod_note_delay_ticks[channel] = -1
-                                                mod_sample_playing[channel] = True
-                                                mod_sample_position[channel] = 0
+                                                if mod_samples[sample_number]["loop_length"] > 2:  # sample looping?
+                                                    mod_period[channel] = mod_next_period[channel]  # just change the period without restarting the sample
+                                                    mod_frequency[channel] = Module._mod_get_frequency(mod_period[channel])
+                                                else:
+                                                    mod_sample_position[channel] = 0  # sample isn't looping, so start it from the beginning
+                                                mod_sample_playing[channel] = True  # spent over an hour trying to figure out why this didn't work... turns out THIS LINE was in the wrong place... SSSSSSCCCCCCHHHHSSSSHHHHH
                                                 mod_sample_volume[channel] = mod_samples[sample_number]["volume"]
                                         elif mod_note_delay_ticks[channel] == -2:  # previously specified delay command greater than the ticks per line?
                                             mod_note_delay_ticks[channel] = -1  # the note didn't play, so reset tick counter
@@ -1274,6 +1286,7 @@ class Module:
                                         if volume < 0:
                                             volume = 0
                                         volume /= 64
+                                        volume *= self._amplify
                                         sample_byte *= volume
                                         sample_byte = int((sample_byte * 32768) + 32768)
                                         mod_sample_position[channel] += sample_step_rate
@@ -1286,12 +1299,16 @@ class Module:
                                 channel_sum_left = 0
                                 channel_sum_right = 0
                                 for counter, channel_byte in enumerate(mod_channel_byte):
+                                    if mod_bass_channel[counter]:
+                                        # https://dobrian.github.io/cmp/topics/filters/lowpassfilter.html
+                                        channel_byte_filtered = 0
+                                        for byte in mod_channel_byte_last[counter]:  # find the sum of x amount of previous bytes
+                                            channel_byte_filtered += byte
+                                        channel_byte = channel_byte_filtered // mod_filter_order
+                                    elif mod_filter:
+                                        channel_byte = (channel_byte + mod_channel_byte_last[counter][0]) // 2
                                     if stereo:
-                                        if mod_filter:
-                                            channel_byte_actual = (channel_byte + mod_channel_byte_last[counter]) // 2
-                                        else:
-                                            channel_byte_actual = channel_byte
-                                        channel_byte_panned = Module._get_panned_bytes(channel_byte_actual, mod_channel_pan[counter])
+                                        channel_byte_panned = Module._get_panned_bytes(channel_byte, mod_channel_pan[counter])
                                         channel_sum_left += (channel_byte_panned[0] * 2) + 32768
                                         channel_sum_right += (channel_byte_panned[1] * 2) + 32768
                                     else:
@@ -1381,7 +1398,8 @@ class Module:
                                         if not mod_looped:
                                             mod_looped = True
                                             mod_loops += 1
-                                        mod_jumps.clear()
+                                        mod_jumps = [[mod_order_position, mod_line]]  # fixes "delayskip.mod" - probably not correct, but it works
+                                        mod_orders_visited.clear()
                                     else:
                                         if mod_order_position in mod_orders_visited:  # has this order been visited before? (used for position jumps determining the loop point)
                                             if not mod_looped:
@@ -1403,18 +1421,20 @@ class Module:
                             else:
                                 mod_pattern_delay_finished = True
 
-                        mod_orders_visited.append(mod_order_position)
+                        mod_orders_visited.append(mod_order_position)  # this is only executed if the END of a pattern is reached with no breaks!!
                         if not mod_line_break:  # position breaks reset the line anyway
                             mod_line = 0
                         if mod_song_length > 1:
                             mod_order_position += 1
-                            if mod_order_position == mod_song_length:
+                            if mod_order_position == mod_song_length:  # reached the very last order?
                                 mod_order_position = 0
                                 mod_pointer = mod_pattern_offsets[mod_order[0]]
                                 mod_line = 0
                                 if not mod_looped:
                                     mod_looped = True
                                     mod_loops += 1
+                                    mod_jumps.clear()
+                                    mod_orders_visited.clear()
                         else:
                             if not mod_looped:
                                 mod_looped = True
@@ -1446,13 +1466,16 @@ class Module:
 
                 if self._render_file is not None:
                     end_time = time.perf_counter() - start_time
-                    minutes = int(end_time // 60)  # for some reason it was giving me 1.0 even though it's integer division :/
+                    minutes = int(end_time / 60)  # for some reason it was giving me 1.0 even though it's integer division :/
                     seconds = int(end_time % 60)
                     if not self._quiet:
                         print()
                         stringy = "Rendered in "
                         if minutes == 0:
-                            stringy += f"{seconds} seconds!"
+                            if seconds == 1:
+                                stringy += "1 second!"
+                            else:
+                                stringy += f"{seconds} seconds!"
                         elif minutes == 1:
                             stringy += f"1 minute, {seconds} seconds!"
                         else:
@@ -1486,6 +1509,9 @@ class Module:
 
     def set_legacy(self, flag):
         self._legacy = flag
+
+    def set_amplify(self, factor):
+        self._amplify = factor
 
     def play(self):
         self._run()
