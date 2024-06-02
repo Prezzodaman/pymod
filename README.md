@@ -46,10 +46,9 @@ brew install portaudio
 ## Usage
 Pymod can be used to play a module from the command line:
 ```console
-pymod <options> <path to .mod file> <sample rate> <play mode>
+pymod <options> <path to .mod file> <play mode>
 ```
 
-- `sample rate` is the sample rate at which the module is played or rendered.
 - `play mode` can be one of the following:
 	* `info` : Just display info about the module.
 	* `text` : Display the module text (list of sample names where mod authors often hide info text).
@@ -57,11 +56,12 @@ pymod <options> <path to .mod file> <sample rate> <play mode>
 	* `stereo_soft` or `stereo_soft_filter` : Play/render the module with a soft/partial stereo separation (with or without filter enabled)
 	* `stereo_hard` or `stereo_hard_filter` : Play/render the module with a hard stereo separation (with or without filter enabled)
 - `options` can be:
+	* `--sample_rate <sample rate> (-s)` : The sample rate at which the module is played or rendered (default is 44100)
 	* `--render <path to wav file> (-r)` : Renders the module to a wave file. If rendering multiple channels, end the filename with _1 (e.g. pymod_1.wav) and the files will be numbered sequentially.
 	* `--loops <number of loops> (-l)` : The amount of times to loop the module. If this option isn't specified, the module will play once.
 	* `--verbose (-v)` : If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.
 	* `--channels (-c)` : Renders each channel to its own file. If playing, this does nothing.
-	* `--buffer <buffer size> (-b)` : Change the buffer size for realtime playback (default is 1024).
+	* `--buffer <buffer size> (-b)` : Change the buffer size for realtime playback (default is 1024)
 	* `--quiet (-q)` : Shows absolutely no info while playing/rendering a module.
 	* `--amplify <factor> (-a)` : Amplifies the output volume by a certain factor, useful for modules with lots of channels. 1 is normal volume, 2 is double volume, 0.5 is half volume, etc.
 
@@ -117,6 +117,7 @@ pymod.Module._generateTestFiles()
 * The filter "simulation" is far from perfect; it's very subtle, but it's there. I have no plans to make it accurate, as E0x is almost never used. It's only here for the sake of completion!
 * Rendering channels individually will take much longer. For example, a 4 channel module will take 4x as long, as it goes through the whole module for each channel. It's done this way so it uses less RAM, instead of storing all the channels at once.
 	* The individual files will be at the same volume as if playing a module normally, so when mixed together, the result will be identical!
+* Rendering in legacy mode will be a little faster, because it isn't doing all the Pymod-exclusive effects processing!
 
 ## Supported effects
 * **0xy** - Arpeggio
@@ -150,10 +151,13 @@ pymod.Module._generateTestFiles()
 * **EEx** - Pattern delay
 * **EFx** - Invert loop
 
-## Pymod exclusive effects
+## Pymod exclusive effects (per-channel)
 Note: in legacy mode, these will do nothing!
-* **E02** - Channel bass filter on
-* **E03** - Channel bass filter off
+* **E02** - Bass filter on
+* **E03** - Bass filter off
+* **E04** - Pseudo-reverb on (fast decay)
+* **E05** - Pseudo-reverb on (slow decay)
+* **E06** - Pseudo-reverb off
 
 ## Thanks
 * **The developers of OpenMPT** - For getting me started tracking way back in 2016, and making the one piece of software I use every day for all of my music (I owe a lot to you!)

@@ -15,13 +15,19 @@
 * Added an extended period table featuring 2 extra octaves, nabbed from TakeTracker (used by default)
 * When rendering modules using the filter, each channel is filtered individually, instead of the sum
     * The files SOUNDED okay, but because the overall sum was filtered, there were slight differences when comparing a mix of the rendered channels against a mixed file rendered by Pymod
-* An effect exclusive to Pymod has been added (E02). When this effect is used on a channel, the high-end is rolled off for that channel, reducing audible ringing from bass sounds! (see the test module "basschan.mod")
-    * The filter can be turned off using effect E03
-    * This will use up more processing time, so for real-time playback, it's highly advisable to increase the buffer size for less jitter!
-* Added a "loud" option which doubles the rendering/playback volume, essential for modules with lots of channels
+* Pymod-exclusive effects have been added!
+    * E02 can be used on a channel to roll off the high-end for that channel, reducing audible ringing from bass sounds! The filter can be turned off using effect E03 (see the test module "basschan.mod" for an example)
+    * E04 and E05 can be used to add a sort of pseudo-reverb effect to a channel, with a fast or slow decay respectively! This can be turned off using effect E06; the effect will decay instead of cutting off (see the test module "delayfx.mod" for an example)
+    * These effects will use up more processing time, so for real-time playback, it's highly advisable to increase the buffer size for less jitter!
+* Added an "amplify" option which increases/decreases the rendering/playback volume
 * ProTracker 2.3's loop behaviour is implemented (see test module "loopchange.mod")
 	* A sample number by itself will change the currently looping sample. So if another sample number is encountered while a sample is looping, the loop of the other sample will be played (starting from its loop point) once the current one has reached the loop end point
 	* If a sample's loop starts at 0, it should first play through all the way (including after the loop end) before playing the looped section
+* Sample summing is now handled sensibly (bytes are only converted once all bytes are summed together)
+* The current progress is now shown while rendering (as a percentage)
+	* When playing, this remaining time will be shown alongside the elapsed time
+* The estimated length of the module is now shown when viewing the module info!
+* Sample rate is now optional, and defaults to 44100 Hz
 
 ### Legacy mode
 An option new to version 1.1.0, this mode enforces many of ProTracker 2.3's quirks.
@@ -51,15 +57,12 @@ The quirks mentioned below are only affected in legacy mode, otherwise, they beh
 * Fixed file rendering to parent/subdirectories
 * Fixed duplicate loops (test modules "line.mod", "simpy.mod" and "patdelay.mod" now loop properly)
 * Fixed loop detection for "ode2ptk.mod", the test module "delayskip.mod", and any modules that return to the beginning without a position/line break
+* "ode2ptk.mod" now renders correctly to individual channels
 
 ### To do
-* Investigate why rendering "ode2ptk.mod" to individual channels causes channels 2, 3 and 4 to be slightly later, even though it's still rendering the module as usual
 * Perhaps figure out a way of rendering only a few samples (small buffer size) at a time, allowing for real-time playback to be used alongside other Python code
 * Add interpolated playback/rendering (processing the module at double the specified sample rate, then averaging the current and last bytes to reduce ringing)
 	* This will, of course, add lots of overhead when playing in real-time, so this is only to be considered...
-* Calculate module rendering/playing progress (e.g. percentage rendered)
-	* This can be done by playing the module through with only the line/position breaking effects enabled, counting the amount of samples as the module plays
-		* Well... supposedly, anyway! I did a test run of this, and not only was it surprisingly slow, the resulting time was a little shorter than it should be
 * Fix sample swapping behaviour with empty samples
 * Figure out unit testing for legacy mode
 
