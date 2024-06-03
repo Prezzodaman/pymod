@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pymod"
+name = "pymod-amiga"
 description = "Python program that plays/renders ProTracker modules using PyAudio."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -32,7 +32,7 @@ path = "pymod/__about__.py"
 exclude = [ ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["pymod"]
+packages = ["pymod-amiga"]
 
 [tool.hatch.envs.default]
 dependencies = [ "pytest", "pytest-cov" ]
