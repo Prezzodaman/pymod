@@ -55,9 +55,12 @@ The quirks mentioned below are only affected in legacy mode, otherwise, they beh
 * Fixed a bug where a position breaking to itself wouldn't immediately count as a loop (fixes the test modules "delaysim.mod" and "breaks2.mod")
 * Fixed a bug where setting the finetune (using E5x) would only work if the value wasn't 0
 * Fixed file rendering to parent/subdirectories
-* Fixed duplicate loops (test modules "line.mod", "simpy.mod" and "patdelay.mod" now loop properly)
-* Fixed loop detection for "ode2ptk.mod", the test module "delayskip.mod", and any modules that return to the beginning without a position/line break
 * "ode2ptk.mod" now renders correctly to individual channels
+* Loop detection has been significantly improved:
+	* Fixed duplicate loops (test modules "line.mod", "simpy.mod" and "patdelay.mod" now loop properly)
+	* Fixed loop detection for "ode2ptk.mod", the test module "delayskip.mod", and any modules that return to the beginning without a position/line break
+	* Fixed loop detection when line breaking in a module that's only 1 order long (fixes the test module "line.mod")
+	* Fixed loop detection when breaking to an earlier line in a module that's only 1 order long (fixes the test module "patdelay.mod")
 
 ### To do
 * Perhaps figure out a way of rendering only a few samples (small buffer size) at a time, allowing for real-time playback to be used alongside other Python code

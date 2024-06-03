@@ -1461,12 +1461,18 @@ class Module:
 
                                 if mod_line_break:
                                     if not mod_position_break:
-                                        mod_order_position += 1
-                                        if mod_order_position > mod_song_length - 1:
-                                            mod_order_position = 0
-                                            if not mod_looped:
-                                                mod_looped = True
-                                                mod_loops += 1
+                                        if mod_song_length > 1:  # if the song is only one order long and there's a line break, stay on the same order
+                                            mod_order_position += 1
+                                            if mod_order_position > mod_song_length - 1:
+                                                mod_order_position = 0
+                                                if not mod_looped:
+                                                    mod_looped = True
+                                                    mod_loops += 1
+                                        else:
+                                            if mod_next_line < mod_line:
+                                                if not mod_looped:
+                                                    mod_looped = True
+                                                    mod_loops += 1
                                     mod_line = mod_next_line
                                     mod_pointer = mod_pattern_offsets[mod_order[mod_order_position]] + (mod_next_line * 4 * mod_channels)
 
