@@ -59,8 +59,11 @@ The quirks mentioned below are only affected in legacy mode, otherwise, they beh
 * Loop detection has been significantly improved:
 	* Fixed duplicate loops (test modules "line.mod", "simpy.mod" and "patdelay.mod" now loop properly)
 	* Fixed loop detection for "ode2ptk.mod", the test module "delayskip.mod", and any modules that return to the beginning without a position/line break
-	* Fixed loop detection when line breaking in a module that's only 1 order long (fixes the test module "line.mod")
-	* Fixed loop detection when breaking to an earlier line in a module that's only 1 order long (fixes the test module "patdelay.mod")
+	* Fixed loop detection when line breaking in a module that's only 1 order long (fixes the test module "patdelay.mod")
+	* Fixed loop detection when breaking to a line that's already been visited (fixes the test modules "line.mod" and "volslide2.mod")
+* Fixed a slight bug in the offset effect (see the test module "offsetness.mod")
+* Mono renders are no longer extremely quiet
+* Fixed the offset effect being 255 bytes behind
 
 ### To do
 * Perhaps figure out a way of rendering only a few samples (small buffer size) at a time, allowing for real-time playback to be used alongside other Python code

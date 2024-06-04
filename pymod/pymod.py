@@ -465,6 +465,7 @@ class Module:
             os.remove(self._render_file)
         elif self._render_file is not None and os.path.splitext(self._render_file)[-1].lower() != ".wav":
             print("Error: Output must be a .wav file!")
+            os.remove(self._render_file)
         elif self._render_file is None and self._render_channels:
             print("Error: The --channels/-c option can only be used alongside the --render/-r option!")
         elif self._legacy and (mod_type != "M.K." and mod_type != "M!K!"):
@@ -590,6 +591,8 @@ class Module:
                 while while_condition:
                     mod_jumps = [[0, 0]]
                     mod_orders_visited = []
+                    mod_lines_visited = []
+                    
                     # these are here, because when rendering channels, they need to be reset every time
                     mod_filter = self._play_mode.endswith("filter")  # a <crude> "simulation" of the amiga hardware filter (it's a simple one pole low-pass filter - literally just finding the difference between the current and last byte)
                     mod_filter_flag = mod_filter  # unlike mod_filter, this can't be changed
@@ -626,7 +629,7 @@ class Module:
                                 mod_channel_pan[a] = -1
                     mod_sample_offset = [0] * mod_channels
                     mod_sample_position = [0] * mod_channels
-                    mod_sample_number = [0] * mod_channels
+                    mod_sample_number = [0] * mod_channels  # actually contains the number of the currently playing sample, even if none is specified!
                     mod_sample_playing = [False] * mod_channels
                     mod_sample_volume = [0] * mod_channels
 
@@ -671,6 +674,7 @@ class Module:
                     mod_delay_channel_fast = [False] * mod_channels
                     mod_loop_play_full = [False] * mod_channels  # if this is false, the sample's loop will play as expected. if the sample is looping but the loop starts at 0, this will be true, meaning the whole sample will have to play through before looping
                     mod_sample_number_cued = [0] * mod_channels
+                    mod_offset_flag = [False] * mod_channels
 
                     mod_tone_memory = [0] * mod_channels
                     mod_offset_memory = [0] * mod_channels
@@ -721,12 +725,12 @@ class Module:
                                     time_elapsed = int(current_time - start_time)
                                     time_elapsed_minutes = time_elapsed // 60
                                     time_elapsed_seconds = time_elapsed % 60
-                                    time_elapsed_string = f"{time_elapsed_minutes}m {time_elapsed_seconds}s"
+                                    time_elapsed_string = f"{time_elapsed_minutes}m {time_elapsed_seconds}s".ljust(6, " ")
                                     if estimate:
                                         time_remaining = int(estimated_length) - time_elapsed
                                         time_remaining_minutes = time_remaining // 60
                                         time_remaining_seconds = time_remaining % 60
-                                        time_elapsed_string += f" (-{time_remaining_minutes}m {time_remaining_seconds}s)"
+                                        time_elapsed_string += "(-" + f"{time_remaining_minutes}m {time_remaining_seconds}s".rjust(6, " ") + ")"
 
                             line_string = ""
                             loop_string = ""
@@ -1056,12 +1060,17 @@ class Module:
 
                                     if mod_effect_number[channel] == 0x9:  # set offset
                                         if mod_effect_param[channel] > 0:
-                                            mod_offset_memory[channel] = mod_effect_param[channel] * 255
+                                            mod_offset_memory[channel] = (mod_effect_param[channel] * 255) + 255
                                             if mod_offset_memory[channel] > mod_samples[mod_sample_number[channel] - 1]["length"]:
                                                 mod_offset_memory[channel] = mod_samples[mod_sample_number[channel] - 1]["length"]
 
+                                    if mod_raw_period[channel] > 0 and sample_number > 0 and mod_effect_number[channel] != 0x9:
+                                        mod_offset_flag[channel] = False
+                                    elif (mod_raw_period[channel] == 0 and sample_number > 0 and mod_effect_number[channel] == 0x9) or (mod_raw_period[channel] > 0 and sample_number > 0 and mod_effect_number[channel] == 0x9):
+                                        mod_offset_flag[channel] = True
                                     if ((mod_raw_period[channel] > 0 and sample_number == 0 and mod_effect_number[channel] != 0x9) or (mod_raw_period[channel] > 0 and sample_number > 0 and mod_effect_number[channel] == 0x9) or (mod_raw_period[channel] > 0 and mod_effect_number[channel] == 0x9)) and not mod_tone_sliding[channel]:
-                                        mod_sample_position[channel] = mod_offset_memory[channel]
+                                        if mod_offset_flag[channel]:
+                                            mod_sample_position[channel] = mod_offset_memory[channel]
 
                                     mod_vibrato[channel] = False
                                     mod_tremolo[channel] = False
@@ -1379,6 +1388,8 @@ class Module:
                                             for delay_filter in range(0, delay_filter_passes):
                                                 delayed_byte += mod_channel_delay_buffer[counter][mod_delay_counter - delay_filter]
                                             delayed_byte /= delay_filter_passes
+                                            if not mod_delay_channel_fast[channel]:
+                                                delayed_byte *= 0.6  # reduce volume slightly for longer decays
                                             delayed_byte = int(0 - delayed_byte)
                                             if stereo:
                                                 channel_sum_right += delayed_byte  # delay only appears in the right channel - this is the intended behaviour! (it's a crude way of simulating stereo depth)
@@ -1396,7 +1407,10 @@ class Module:
                                         if channel_sum_right < -32768:
                                             channel_sum_right = -32768
                                     else:
-                                        channel_sum //= mod_channels
+                                        if channel_sum > 32767:
+                                            channel_sum = 32767
+                                        if channel_sum < -32768:
+                                            channel_sum = 32768
 
                                     if stereo:
                                         channel_sum_left += 32768
@@ -1428,6 +1442,9 @@ class Module:
                                     mod_overall_length += 1
                                 else:
                                     mod_bytes_rendered += 1
+
+                            if not mod_position_break and not mod_line_break and mod_pattern_delay_finished:
+                                mod_lines_visited.append([mod_order_position, mod_line])
 
                             mod_looped = False  # it only makes sense to add one loop at a time... this also fixes some duplicate loop errors
                             if mod_pattern_delay == 0:
@@ -1468,11 +1485,10 @@ class Module:
                                                 if not mod_looped:
                                                     mod_looped = True
                                                     mod_loops += 1
-                                        else:
-                                            if mod_next_line < mod_line:
-                                                if not mod_looped:
-                                                    mod_looped = True
-                                                    mod_loops += 1
+                                        if [mod_order_position, mod_next_line] in mod_lines_visited:
+                                            if not mod_looped:
+                                                mod_looped = True
+                                                mod_loops += 1
                                     mod_line = mod_next_line
                                     mod_pointer = mod_pattern_offsets[mod_order[mod_order_position]] + (mod_next_line * 4 * mod_channels)
 
