@@ -64,6 +64,7 @@ pymod <options> <path to .mod file> <play mode>
 	* `--buffer <buffer size> (-b)` : Change the buffer size for realtime playback (default is 1024)
 	* `--quiet (-q)` : Shows absolutely no info while playing/rendering a module.
 	* `--amplify <factor> (-a)` : Amplifies the output volume by a certain factor, useful for modules with lots of channels. 1 is normal volume, 2 is double volume, 0.5 is half volume, etc.
+	* `--interpolate (-i)` : Use linear interpolation when playing back samples, resulting in a smoother, cleaner sound.
 
 Pymod can also be imported into your Python programs and used as a module:
 
@@ -96,8 +97,9 @@ The `Module` instance also has these methods:
 - `set_buffer_size(<size>)` : Change the buffer size for realtime playback (default is 1024).
 - `set_quiet(<flag>)` : If true, this shows absolutely no info while playing/rendering a module.
 - `set_amplify(<factor>)` : Amplifies the output volume by a certain factor.
+- `set_interpolate(<flag>)` : Use linear interpolation when playing back samples.
 
-By default, the sample rate is 44100 Hz and the play mode is mono. These can be changed on init by specifying the optional arguments `sample_rate` and `play_mode`. `verbose`, `quiet` and `amplify` can also be specified as arguments.
+By default, the sample rate is 44100 Hz and the play mode is mono. These can be changed on init by specifying the optional arguments `sample_rate` and `play_mode`. `verbose`, `quiet`, `amplify` and `interpolate` can also be specified as arguments.
 
 ## Unit testing
 Unit tests can be run by using `pytest`. These tests run against a set of pre-generated wav files to make sure that the output is consistent across changes.

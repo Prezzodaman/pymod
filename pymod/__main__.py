@@ -44,6 +44,7 @@ def main():
         parser.add_argument("-q", "--quiet", action="store_true", help="Shows absolutely no info while playing/rendering a module")
         parser.add_argument("-le", "--legacy", action="store_true", help="Simulates the quirks of ProTracker 2.3")
         parser.add_argument("-a", "--amplify", type=float, default=1, help="Amplifies playback by the specified factor (e.g. 1 for normal volume, 2 for double volume, 0.5 for half volume)")
+        parser.add_argument("-i", "--interpolate", action="store_true", help="Use linear interpolation when playing back samples, resulting in a smoother, cleaner sound")
         args = parser.parse_args()
 
         module = pymod.Module(args.input_file.name)
@@ -55,6 +56,7 @@ def main():
         module.set_quiet(args.quiet)
         module.set_legacy(args.legacy)
         module.set_amplify(args.amplify)
+        module.set_interpolate(args.interpolate)
 
         if module is not None:
             if args.render is not None:

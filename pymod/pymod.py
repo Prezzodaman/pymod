@@ -376,7 +376,7 @@ class Module:
         return 44100
 
     # -- Instance Methods
-    def __init__(self, input_file_path, sample_rate=0, play_mode="mono", verbose=False, quiet=False, legacy=False, amplify=1):
+    def __init__(self, input_file_path, sample_rate=0, play_mode="mono", verbose=False, quiet=False, legacy=False, amplify=1, interpolate=False):
         """Constructor based on command line arguments."""
 
         # these are set based on the keyword arguments, when initializing a Module object
@@ -390,6 +390,7 @@ class Module:
         self._quiet = quiet  # this only affects the program's "introduction", playback and rendering - showing module info will still work
         self._legacy = legacy
         self._amplify = amplify
+        self._interpolate = interpolate
 
         # these are just defaults
         self._render_file = None
@@ -602,8 +603,10 @@ class Module:
                         mod_period_amount = len(Module._mod_extended_periods[0])
 
                     mod_channel_byte = [0] * mod_channels  # the current byte in each channel, summed together later on
-                    mod_filter_order = 64  # trying to keep the value somewhat low so it renders/plays faster (for the standard filter, only the first byte of mod_channel_byte_last is used)
-                    mod_delay_length = 2000
+                    mod_filter_order_base = 64  # the desired order at 44100hz (trying to keep the value somewhat low so it renders/plays faster. for the standard filter, only the first byte of mod_channel_byte_last is used)
+                    mod_filter_order = int((mod_filter_order_base / 44100) * self._sample_rate)
+                    mod_delay_length_base = 2000  # the desired delay length at 44100hz
+                    mod_delay_length = int((mod_delay_length_base / 44100) * self._sample_rate)
                     mod_delay_counter = 0
                     mod_channel_delay_buffer = []
                     mod_channel_byte_last_temp = []
@@ -1332,7 +1335,25 @@ class Module:
                                             sample_byte_position = int(mod_sample_offset[channel] + mod_sample_position[channel])
                                             if sample_byte_position > len(mod_file) - 1:
                                                 sample_byte_position = len(mod_file) - 1
-                                            sample_byte = (((mod_file[sample_byte_position] + 128) & 255) - 128) / 128
+                                            sample_byte = (mod_file[sample_byte_position] + 128) & 255  # sample byte converted to an unsigned value
+                                            if self._interpolate:
+                                                # source: none, i stayed up until half 2 coding this "algorithm" in bed ;)
+                                                sample_position_mod = mod_sample_position[channel] % 1  # current position between 0.0 and 0.9 recurring
+                                                sample_steps = 1 / sample_step_rate  # the amount of steps required to get to the next byte
+
+                                                if sample_byte_position + 1 > len(mod_file) - 1:
+                                                    sample_byte_next = sample_byte
+                                                else:
+                                                    sample_byte_next = (mod_file[sample_byte_position + 1] + 128) & 255
+                                                sample_byte <<= 8  # convert to 16-bit to remove noise!
+                                                sample_byte_next <<= 8
+                                                sample_byte_difference = sample_byte_next - sample_byte  # the difference between the current and next bytes
+                                                sample_byte_step = sample_byte_difference * sample_position_mod  # how much to add/subtract depending on the current position
+                                                sample_byte_16 = ((mod_file[sample_byte_position] + 128) & 255) << 8  # the CURRENT sample byte, converted to an unsigned 16 bit value...
+                                                sample_byte_interpolated = sample_byte_16 + sample_byte_step  # apply the step difference
+                                                sample_byte = (sample_byte_interpolated - 32768) / 32768  # convert to a value between -1 and 1
+                                            else:
+                                                sample_byte = (sample_byte - 128) / 128  # convert to a value between -1 and 1
                                             if self._legacy and mod_ticks_counter_actual == 0:  # reset to base volume on the first tick
                                                 volume = mod_sample_volume[channel]
                                             else:
@@ -1388,6 +1409,7 @@ class Module:
                                             for delay_filter in range(0, delay_filter_passes):
                                                 delayed_byte += mod_channel_delay_buffer[counter][mod_delay_counter - delay_filter]
                                             delayed_byte /= delay_filter_passes
+                                            delayed_byte *= 1.2  # make the delay a smidge louder
                                             if not mod_delay_channel_fast[channel]:
                                                 delayed_byte *= 0.6  # reduce volume slightly for longer decays
                                             delayed_byte = int(0 - delayed_byte)
@@ -1647,6 +1669,9 @@ class Module:
 
     def set_amplify(self, factor):
         self._amplify = factor
+
+    def set_interpolate(self, flag):
+        self._interpolate = flag
 
     def play(self):
         self._run()

@@ -28,6 +28,7 @@
 	* When playing, this remaining time will be shown alongside the elapsed time
 * The estimated length of the module is now shown when viewing the module info!
 * Sample rate is now optional, and defaults to 44100 Hz
+* Sample interpolation has now been added as an option, resulting in much cleaner samples! As a bonus, it adds very little overhead to playback or rendering.
 
 ### Legacy mode
 An option new to version 1.1.0, this mode enforces many of ProTracker 2.3's quirks.
@@ -67,8 +68,6 @@ The quirks mentioned below are only affected in legacy mode, otherwise, they beh
 
 ### To do
 * Perhaps figure out a way of rendering only a few samples (small buffer size) at a time, allowing for real-time playback to be used alongside other Python code
-* Add interpolated playback/rendering (processing the module at double the specified sample rate, then averaging the current and last bytes to reduce ringing)
-	* This will, of course, add lots of overhead when playing in real-time, so this is only to be considered...
 * Fix sample swapping behaviour with empty samples
 * Figure out unit testing for legacy mode
 
