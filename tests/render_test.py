@@ -121,7 +121,7 @@ modules_list = [
     'cuts', 'ode2ptk', 'wraparound', 'wraparound2', 'breaks',
     'breaks2', 'volall', 'arptimings', 'timestretch', 'arpdesync',
     'extended', 'portlimit', 'loopchange', 'loud2', 'loud3',
-    'basschan', 'loopchange2', 'delayfx', 'offsetness'
+    'basschan', 'loopchange2', 'delayfx', 'offsetness', 'reverse'
 ]
 
 

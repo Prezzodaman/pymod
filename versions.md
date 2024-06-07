@@ -18,6 +18,7 @@
 * Pymod-exclusive effects have been added!
     * E02 can be used on a channel to roll off the high-end for that channel, reducing audible ringing from bass sounds! The filter can be turned off using effect E03 (see the test module "basschan.mod" for an example)
     * E04 and E05 can be used to add a sort of pseudo-reverb effect to a channel, with a fast or slow decay respectively! This can be turned off using effect E06; the effect will decay instead of cutting off (see the test module "delayfx.mod" for an example)
+    * E07 and E08 can be used to play a sample backwards or forwards respectively (see the test module "reverse.mod" for an example)
     * These effects will use up more processing time, so for real-time playback, it's highly advisable to increase the buffer size for less jitter!
 * Added an "amplify" option which increases/decreases the rendering/playback volume
 * ProTracker 2.3's loop behaviour is implemented (see test module "loopchange.mod")
@@ -28,7 +29,7 @@
 	* When playing, this remaining time will be shown alongside the elapsed time
 * The estimated length of the module is now shown when viewing the module info!
 * Sample rate is now optional, and defaults to 44100 Hz
-* Sample interpolation has now been added as an option, resulting in much cleaner samples! As a bonus, it adds very little overhead to playback or rendering.
+* Sample interpolation has now been added as an option, resulting in much cleaner samples!
 
 ### Legacy mode
 An option new to version 1.1.0, this mode enforces many of ProTracker 2.3's quirks.

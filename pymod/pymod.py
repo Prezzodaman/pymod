@@ -454,23 +454,34 @@ class Module:
 
         if mod_channels == 0:
             print("Error: Invalid module!")
+            if self._render_file is not None:
+                os.remove(self._render_file)
         elif self._sample_rate < sample_rate_minimum or self._sample_rate > 380000:
             print(f"Error: Sample rate must be between {sample_rate_minimum} and 380000!")
+            if self._render_file is not None:
+                os.remove(self._render_file)
         elif self._play_mode not in Module.play_modes():
             play_modes_string = ", ".join(Module.play_modes())
             print(f"Error: Invalid play mode: {self._play_mode}. Accepted modes: {play_modes_string}")
+            if self._render_file is not None:
+                os.remove(self._render_file)
         elif self._buffer_size < 0 or self._buffer_size > 8192:
             print("Error: Buffer size must be between 0 and 8192!")
+            if self._render_file is not None:
+                os.remove(self._render_file)
         elif self._render_file is not None and self._render_channels and not self._render_file.endswith("_1.wav"):
             print("Error: File name is suffixed incorrectly for channel rendering!")
             os.remove(self._render_file)
         elif self._render_file is not None and os.path.splitext(self._render_file)[-1].lower() != ".wav":
             print("Error: Output must be a .wav file!")
-            os.remove(self._render_file)
+            if self._render_file is not None:
+                os.remove(self._render_file)
         elif self._render_file is None and self._render_channels:
             print("Error: The --channels/-c option can only be used alongside the --render/-r option!")
         elif self._legacy and (mod_type != "M.K." and mod_type != "M!K!"):
             print("Error: Only 4 channel modules can be used in legacy mode!")
+            if self._render_file is not None:
+                os.remove(self._render_file)
         else:
             stereo = self._play_mode.startswith("stereo")
             mod_lines = 64
@@ -674,9 +685,11 @@ class Module:
                     mod_glissando = [False] * mod_channels
                     mod_bass_channel = [False] * mod_channels  # pymod exclusive feature: use the effect e02 on a channel with bass sounds on it (e.g. bass drums or sub basses) to remove the ringing :D (e03 turns the bass filter off)
                     mod_delay_channel = [False] * mod_channels  # pymod exclusive feature: use the effect e04 or e05 on a channel to add a crude reverb simulation! (e06 turns it off)
+                    mod_sample_reversed = [False] * mod_channels  # pymod exclusive feature: use the effect e07 to play a sample in reverse (or e08 to play it forwards again)
+                    mod_sample_reversed_flag = [False] * mod_channels
                     mod_delay_channel_fast = [False] * mod_channels
                     mod_loop_play_full = [False] * mod_channels  # if this is false, the sample's loop will play as expected. if the sample is looping but the loop starts at 0, this will be true, meaning the whole sample will have to play through before looping
-                    mod_sample_number_cued = [0] * mod_channels
+                    mod_sample_number_cued = [0] * mod_channels  # the next sample to be played once a loop's finished, if another sample number is specified (if a sample is just being played normally from the start, this should match mod_sample_number!)
                     mod_offset_flag = [False] * mod_channels
 
                     mod_tone_memory = [0] * mod_channels
@@ -731,6 +744,8 @@ class Module:
                                     time_elapsed_string = f"{time_elapsed_minutes}m {time_elapsed_seconds}s".ljust(6, " ")
                                     if estimate:
                                         time_remaining = int(estimated_length) - time_elapsed
+                                        if time_remaining < 0:  # man, that accuracy
+                                            time_remaining = 0
                                         time_remaining_minutes = time_remaining // 60
                                         time_remaining_seconds = time_remaining % 60
                                         time_elapsed_string += "(-" + f"{time_remaining_minutes}m {time_remaining_seconds}s".rjust(6, " ") + ")"
@@ -888,6 +903,7 @@ class Module:
                                                     mod_channel_pan[channel] = 1
                                                 else:
                                                     mod_channel_pan[channel] = ((param - 8) / 8)
+                                        mod_sample_reversed_flag[channel] = False
                                         if effect == 0x0 and not self._legacy:  # pymod exclusive effects
                                             if param == 2:  # bass channel filter on
                                                 mod_bass_channel[channel] = True
@@ -901,6 +917,11 @@ class Module:
                                                 mod_delay_channel_fast[channel] = False
                                             elif param == 6:  # channel delay off
                                                 mod_delay_channel[channel] = False
+                                            elif param == 7:  # sample reverse
+                                                mod_sample_reversed[channel] = True
+                                                mod_sample_reversed_flag[channel] = period > 0
+                                            elif param == 8:  # sample forwards
+                                                mod_sample_reversed[channel] = False
 
                                     if effect == 0x6:  # pattern loop
                                         if param == 0:  # set loop start
@@ -937,7 +958,11 @@ class Module:
                                             if not mod_tone_sliding[channel]:  # don't reset the sample position or volume if sliding notes
                                                 if mod_note_delay_ticks[channel] == -1 or (mod_note_delay_ticks[channel] > 0 and mod_samples[sample_number]["loop_length"] > 2 and self._legacy):  # this'll always be -1 unless there's a note delay effect
                                                     mod_sample_playing[channel] = True
-                                                    mod_sample_position[channel] = 0
+                                                    if mod_sample_reversed_flag[channel]:  # has a "reverse" effect been encountered?
+                                                        mod_sample_position[channel] = mod_samples[mod_sample_number[channel] - 1]["length"] - 1
+                                                    else:  # no reverse effect, play sample normally
+                                                        mod_sample_position[channel] = 0
+                                                        mod_sample_reversed[channel] = False
                                             if mod_note_delay_ticks[channel] == -1 or (mod_note_delay_ticks[channel] > 0 and mod_samples[sample_number]["loop_length"] > 2 and self._legacy):
                                                 mod_sample_volume[channel] = mod_samples[sample_number]["volume"]
                                         sample_number += 1
@@ -945,13 +970,21 @@ class Module:
                                         if mod_raw_period[channel] > 0:  # period, no sample?
                                             if mod_note_delay_ticks[channel] == -1 and not mod_tone_sliding[channel]:
                                                 mod_sample_playing[channel] = True
-                                                mod_sample_position[channel] = 0
+                                                if mod_sample_reversed_flag[channel]:  # has a "reverse" effect been encountered?
+                                                    mod_sample_position[channel] = mod_samples[mod_sample_number[channel] - 1]["length"] - 1
+                                                else:  # no reverse effect, play sample normally
+                                                    mod_sample_position[channel] = 0
+                                                    mod_sample_reversed[channel] = False
                                     if mod_raw_period[channel] > 0:  # period, regardless of sample number?
                                         if mod_samples[mod_sample_number_cued[channel] - 1]["loop_start"] == 0:  # i seriously have no clue if this is correct
                                             mod_loop_play_full[channel] = True  # a period will reset this flag
                                         if mod_sample_number[channel] != mod_sample_number_cued[channel]:
                                             mod_sample_offset[channel] = mod_samples[mod_sample_number_cued[channel] - 1]["offset"]
-                                            mod_sample_position[channel] = 0
+                                            if mod_sample_reversed_flag[channel]:  # has a "reverse" effect been encountered?
+                                                mod_sample_position[channel] = mod_samples[mod_sample_number_cued[channel] - 1]["length"] - 1
+                                            else:  # no reverse effect, play sample normally
+                                                mod_sample_position[channel] = 0
+                                                mod_sample_reversed[channel] = False
                                         mod_sample_number[channel] = mod_sample_number_cued[channel]
 
                                     if mod_effect_number[channel] != 0x3 and period > 0:  # if there's a slide before a period, this changes it before the slide so it slides to the correct period (slideperiodslideslideperiod)
@@ -1236,7 +1269,7 @@ class Module:
                                         if sample_number > 0:
                                             sample_number -= 1
                                             if mod_samples[sample_number]["loop_length"] <= 2:  # sample isn't looping
-                                                if mod_sample_position[channel] > mod_samples[sample_number]["length"] - 1:  # reached end of sample?
+                                                if mod_sample_position[channel] > mod_samples[sample_number]["length"] - 1 or mod_sample_position[channel] < 0:  # reached end of sample?
                                                     mod_sample_playing[channel] = False  # not looping, end sample
                                             else:  # sample is looping
                                                 if mod_loop_play_full[channel]:  # the current sample's loop begins at 0, play the whole thing first
@@ -1339,7 +1372,10 @@ class Module:
                                             if self._interpolate:
                                                 # source: none, i stayed up until half 2 coding this "algorithm" in bed ;)
                                                 sample_position_mod = mod_sample_position[channel] % 1  # current position between 0.0 and 0.9 recurring
-                                                sample_steps = 1 / sample_step_rate  # the amount of steps required to get to the next byte
+                                                if sample_step_rate > 0:
+                                                    sample_steps = 1 / sample_step_rate  # the amount of steps required to get to the next byte
+                                                else:
+                                                    sample_steps = 0
 
                                                 if sample_byte_position + 1 > len(mod_file) - 1:
                                                     sample_byte_next = sample_byte
@@ -1367,7 +1403,10 @@ class Module:
                                             sample_byte *= volume
                                             sample_byte /= mod_channels  # it makes way more sense to reduce the volume per-channel instead of overall
                                             sample_byte = int(sample_byte * 32768)
-                                            mod_sample_position[channel] += sample_step_rate
+                                            if mod_sample_reversed[channel]:
+                                                mod_sample_position[channel] -= sample_step_rate
+                                            else:
+                                                mod_sample_position[channel] += sample_step_rate
                                         else:
                                             sample_byte = 0
 

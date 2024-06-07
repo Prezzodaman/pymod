@@ -160,6 +160,8 @@ Note: in legacy mode, these will do nothing!
 * **E04** - Pseudo-reverb on (fast decay)
 * **E05** - Pseudo-reverb on (slow decay)
 * **E06** - Pseudo-reverb off
+* **E07** - Play sample backwards
+* **E08** - Play sample forwards
 
 ## Thanks
 * **The developers of OpenMPT** - For getting me started tracking way back in 2016, and making the one piece of software I use every day for all of my music (I owe a lot to you!)
