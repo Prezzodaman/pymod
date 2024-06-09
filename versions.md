@@ -66,11 +66,13 @@ The quirks mentioned below are only affected in legacy mode, otherwise, they beh
 * Fixed a slight bug in the offset effect (see the test module "offsetness.mod")
 * Mono renders are no longer extremely quiet
 * Fixed the offset effect being 255 bytes behind
+* Fixed the note delay effect when a sample offset's been set already (see the test module "offsetdelay.mod")
+* Fixed sample swapping behaviour with empty samples
 
 ### To do
 * Perhaps figure out a way of rendering only a few samples (small buffer size) at a time, allowing for real-time playback to be used alongside other Python code
-* Fix sample swapping behaviour with empty samples
 * Figure out unit testing for legacy mode
+* Fix sample swapping with LOOPED samples
 
 ## 1.0.1:
 ### Bug fixes

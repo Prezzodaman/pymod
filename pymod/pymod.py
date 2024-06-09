@@ -526,6 +526,9 @@ class Module:
                 if sample_length > 0:
                     mod_unique_samples.append([a, sample])
 
+            sample = {"name": "", "length": 4, "finetune": 0, "volume": 0, "loop_start": 0, "loop_length": 4, "offset": 0}  # an empty sample, used for loop swapping
+            mod_samples.append(sample)
+
             mod_song_length = mod_file[mod_pointer]
             mod_pointer += 2
 
@@ -552,8 +555,8 @@ class Module:
             if self._play_mode == "text":
                 print("Module text:")
                 print()
-                for sample in mod_samples:
-                    print(sample["name"])
+                for sample in range(0, mod_samples_amount):
+                    print(mod_samples[sample]["name"])
             else:
                 estimate = True
                 mod_note_names = []
@@ -604,7 +607,7 @@ class Module:
                     mod_jumps = [[0, 0]]
                     mod_orders_visited = []
                     mod_lines_visited = []
-                    
+
                     # these are here, because when rendering channels, they need to be reset every time
                     mod_filter = self._play_mode.endswith("filter")  # a <crude> "simulation" of the amiga hardware filter (it's a simple one pole low-pass filter - literally just finding the difference between the current and last byte)
                     mod_filter_flag = mod_filter  # unlike mod_filter, this can't be changed
@@ -691,6 +694,7 @@ class Module:
                     mod_loop_play_full = [False] * mod_channels  # if this is false, the sample's loop will play as expected. if the sample is looping but the loop starts at 0, this will be true, meaning the whole sample will have to play through before looping
                     mod_sample_number_cued = [0] * mod_channels  # the next sample to be played once a loop's finished, if another sample number is specified (if a sample is just being played normally from the start, this should match mod_sample_number!)
                     mod_offset_flag = [False] * mod_channels
+                    mod_offset_delay_flag = [False] * mod_channels
 
                     mod_tone_memory = [0] * mod_channels
                     mod_offset_memory = [0] * mod_channels
@@ -936,23 +940,22 @@ class Module:
                                 if not estimating_length:
                                     if sample_number > 0:  # is a sample playing?
                                         mod_invert_loop_counter[channel] = 0
+                                        if mod_samples[sample_number - 1]["length"] == 0 and mod_pattern_delay_finished:  # is the current sample empty?
+                                            sample_number = 32  # play an empty "sample"
                                         mod_sample_number_cued[channel] = sample_number  # "cue up" the next sample
-                                        if mod_samples[sample_number - 1]["length"] > 0:
-                                            if mod_samples[sample_number - 1]["loop_start"] == 0 and mod_samples[sample_number - 1]["loop_length"] > 2:  # is this sample looping and does the loop start at 0?
-                                                if not mod_sample_playing[channel]:  # is there no sample currently playing?
-                                                    mod_loop_play_full[channel] = True  # the full sample must be played first
-                                            else:  # not looping
-                                                if not mod_sample_playing[channel]:
-                                                    mod_loop_play_full[channel] = False  # idk if this is correct, half of the loop code is guess work and playing it by ear
-                                            if mod_sample_position[channel] == 0:  # sample hasn't played yet?
-                                                mod_sample_number[channel] = sample_number  # ...play it
+                                        if mod_samples[sample_number - 1]["loop_start"] == 0 and mod_samples[sample_number - 1]["loop_length"] > 2:  # is this sample looping and does the loop start at 0?
+                                            if not mod_sample_playing[channel]:  # is there no sample currently playing?
+                                                mod_loop_play_full[channel] = True  # the full sample must be played first
+                                        else:  # not looping
+                                            if not mod_sample_playing[channel]:
+                                                mod_loop_play_full[channel] = False  # idk if this is correct, half of the loop code is guess work and playing it by ear
+                                        if mod_sample_position[channel] == 0:  # sample hasn't played yet?
+                                            mod_sample_number[channel] = sample_number  # ...play it
                                         # if the sample is empty, none of that code will be executed, so nothing will be played
                                         sample_number -= 1
                                         if mod_sample_number[channel] > 0 and mod_raw_period[channel] == 0:  # sample number, no period?
-                                            if mod_note_delay_ticks[channel] == -1:  # if there's a note delay, the volume will be set once the counter reaches 0
-                                                mod_sample_volume[channel] = mod_samples[sample_number]["volume"]  # TODO: this part is hideously unfinished! implement the correct behaviour (the openmpt test module "PTSwapEmpty.mod" doesn't play correctly)
-                                                # if a currently playing sample is looping, and the sample number is changed to an empty one/a sample with no loop, the loop of the previous sample should finish before ending entirely
-                                                # that doesn't happen right now :/
+                                            if mod_note_delay_ticks[channel] == -1 and sample_number != 31:  # if there's a note delay, the volume will be set once the counter reaches 0
+                                                mod_sample_volume[channel] = mod_samples[sample_number]["volume"]
                                         elif mod_sample_number[channel] > 0 and mod_raw_period[channel] > 0:  # sample number and period...
                                             mod_sample_offset[channel] = mod_samples[sample_number]["offset"]
                                             if not mod_tone_sliding[channel]:  # don't reset the sample position or volume if sliding notes
@@ -1076,12 +1079,20 @@ class Module:
                                     mod_line_break = True
 
                                 if not estimating_length:
+                                    if mod_effect_number[channel] == 0x8:  # set panning
+                                        if not self._legacy:  # this effect isn't supported in protracker 2.3!
+                                            if mod_effect_param[channel] == 255:
+                                                mod_channel_pan[channel] = 1
+                                            else:
+                                                mod_channel_pan[channel] = (mod_effect_param[channel] - 128) / 128
+
                                     if (mod_effect_number[channel] == 0xa or mod_effect_number[channel] == 0x5 or mod_effect_number[channel] == 0x6) and mod_pattern_delay_finished:  # volume slide/ + tone portamento/ + vibrato (volume slide doesn't have any memory)
                                         mod_volslide_fine[channel] = False
                                         if mod_effect_param[channel] >= 0x10:  # slide up
                                             mod_volslide_amount[channel] = mod_effect_param[channel] >> 4
                                         else:  # slide down
                                             mod_volslide_amount[channel] = 0 - mod_effect_param[channel]
+
                                     if mod_effect_number[channel] == 0xc:  # set volume
                                         mod_sample_volume[channel] = mod_effect_param[channel]
                                         if mod_sample_volume[channel] > 64:
@@ -1094,6 +1105,7 @@ class Module:
                                     #     * it's a period and a sample number alongside an offset effect
                                     #     * there's no tone portamento currently happening
 
+                                    mod_offset_delay_flag[channel] = False
                                     if mod_effect_number[channel] == 0x9:  # set offset
                                         if mod_effect_param[channel] > 0:
                                             mod_offset_memory[channel] = (mod_effect_param[channel] * 255) + 255
@@ -1106,7 +1118,12 @@ class Module:
                                         mod_offset_flag[channel] = True
                                     if ((mod_raw_period[channel] > 0 and sample_number == 0 and mod_effect_number[channel] != 0x9) or (mod_raw_period[channel] > 0 and sample_number > 0 and mod_effect_number[channel] == 0x9) or (mod_raw_period[channel] > 0 and mod_effect_number[channel] == 0x9)) and not mod_tone_sliding[channel]:
                                         if mod_offset_flag[channel]:
-                                            mod_sample_position[channel] = mod_offset_memory[channel]
+                                            if mod_note_delay_ticks[channel] == -1:
+                                                mod_sample_position[channel] = mod_offset_memory[channel]
+                                            else:
+                                                mod_offset_delay_flag[channel] = True
+
+                                    # vibrato/tremolo
 
                                     mod_vibrato[channel] = False
                                     mod_tremolo[channel] = False
@@ -1114,13 +1131,6 @@ class Module:
                                         memory = mod_vibrato_memory[channel]
                                     elif mod_effect_number[channel] == 0x7:  # tremolo
                                         memory = mod_tremolo_memory[channel]
-
-                                    if mod_effect_number[channel] == 0x8:  # set panning
-                                        if not self._legacy:  # this effect isn't supported in protracker 2.3!
-                                            if mod_effect_param[channel] == 255:
-                                                mod_channel_pan[channel] = 1
-                                            else:
-                                                mod_channel_pan[channel] = (mod_effect_param[channel] - 128) / 128
 
                                     if mod_raw_period[channel] > 0:  # if there's a period...
                                         if not mod_vibrato[channel]:  # ...and there's no vibrato...
@@ -1203,7 +1213,7 @@ class Module:
                                 if not estimating_length:
                                     for channel in range(0, mod_channels):
                                         mod_channel_byte_last[channel].insert(0, mod_channel_byte[channel])  # stores a "byte history" of sorts, inserting the last byte at the beginning, shifting the others over to the right
-                                        mod_channel_byte_last[channel] = mod_channel_byte_last[channel][:-1]  # remove the last element after insertion, keeping the list the same size
+                                        mod_channel_byte_last[channel].pop()  # remove the last element after insertion, keeping the list the same size
 
                                         if mod_ticks_counter_actual_previous != mod_ticks_counter_actual or mod_ticks_counter == 0:  # on every tick (including the first)
                                             if mod_retrig_speed[channel] > 0:
@@ -1277,7 +1287,6 @@ class Module:
                                                         mod_loop_play_full[channel] = False  # sample has played in full
                                                         if mod_samples[mod_sample_number_cued[channel] - 1]["loop_length"] <= 2:  # is the cued sample looping?
                                                             mod_sample_playing[channel] = False  # if not, stop playback
-
                                                         mod_sample_number[channel] = mod_sample_number_cued[channel]  # idk if this is technically correct
                                                         mod_sample_offset[channel] = mod_samples[mod_sample_number_cued[channel] - 1]["offset"]
                                                         mod_sample_position[channel] = mod_samples[mod_sample_number_cued[channel] - 1]["loop_start"]
@@ -1287,9 +1296,13 @@ class Module:
                                                         # it's not possible to simply set the position to the loop start, because the sample stepping accuracy will be lost, especially with higher notes
                                                         if mod_sample_number[channel] != mod_sample_number_cued[channel]:  # reached the loop end... is the currently looping sample number different to the cued one?
                                                             if mod_samples[mod_sample_number_cued[channel] - 1]["loop_length"] > 2:  # is the cued sample looping?
-                                                                mod_sample_number[channel] = mod_sample_number_cued[channel]
-                                                                mod_sample_offset[channel] = mod_samples[mod_sample_number_cued[channel] - 1]["offset"]
-                                                                mod_sample_position[channel] = mod_samples[mod_sample_number_cued[channel] - 1]["loop_start"]
+                                                                if mod_sample_number_cued[channel] == 32:
+                                                                    mod_sample_number[channel] = mod_sample_number_cued[channel]
+                                                                    mod_sample_volume[channel] = 0
+                                                                else:
+                                                                    mod_sample_number[channel] = mod_sample_number_cued[channel]
+                                                                    mod_sample_offset[channel] = mod_samples[mod_sample_number_cued[channel] - 1]["offset"]
+                                                                    mod_sample_position[channel] = mod_samples[mod_sample_number_cued[channel] - 1]["loop_start"]
                                                             else:  # cued sample isn't looping, so stop playback altogether
                                                                 mod_sample_playing[channel] = False
                                                                 mod_sample_number[channel] = mod_sample_number_cued[channel]
@@ -1355,7 +1368,10 @@ class Module:
                                                         mod_period[channel] = mod_next_period[channel]  # just change the period without restarting the sample
                                                         mod_frequency[channel] = Module._mod_get_frequency(mod_period[channel])
                                                     else:
-                                                        mod_sample_position[channel] = 0  # sample isn't looping, so start it from the beginning
+                                                        if mod_offset_delay_flag[channel]:
+                                                            mod_sample_position[channel] = mod_offset_memory[channel]
+                                                        else:
+                                                            mod_sample_position[channel] = 0  # sample isn't looping, so start it from the beginning
                                                     mod_sample_playing[channel] = True  # spent over an hour trying to figure out why this didn't work... turns out THIS LINE was in the wrong place... SSSSSSCCCCCCHHHHSSSSHHHHH
                                                     mod_sample_volume[channel] = mod_samples[sample_number]["volume"]
                                             elif mod_note_delay_ticks[channel] == -2:  # previously specified delay command greater than the ticks per line?
@@ -1372,11 +1388,6 @@ class Module:
                                             if self._interpolate:
                                                 # source: none, i stayed up until half 2 coding this "algorithm" in bed ;)
                                                 sample_position_mod = mod_sample_position[channel] % 1  # current position between 0.0 and 0.9 recurring
-                                                if sample_step_rate > 0:
-                                                    sample_steps = 1 / sample_step_rate  # the amount of steps required to get to the next byte
-                                                else:
-                                                    sample_steps = 0
-
                                                 if sample_byte_position + 1 > len(mod_file) - 1:
                                                     sample_byte_next = sample_byte
                                                 else:
