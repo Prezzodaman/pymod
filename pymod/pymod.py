@@ -585,6 +585,8 @@ class Module:
                 channel_sum_right = 0
                 channel_current = 0  # used when rendering individual channels
                 while_condition = True
+                mod_using_bass_channel = False  # optimize playback by skipping the dsp for effects that aren't used in the module
+                mod_using_delay_channel = False
                 mod_overall_length = 0  # for some reason this is VERY slightly off (even when all the conditions are true... no clue why), but it's Close Enough(tm)
                 mod_bytes_rendered = 0
                 if estimate:
@@ -907,25 +909,6 @@ class Module:
                                                     mod_channel_pan[channel] = 1
                                                 else:
                                                     mod_channel_pan[channel] = ((param - 8) / 8)
-                                        mod_sample_reversed_flag[channel] = False
-                                        if effect == 0x0 and not self._legacy:  # pymod exclusive effects
-                                            if param == 2:  # bass channel filter on
-                                                mod_bass_channel[channel] = True
-                                            elif param == 3:  # bass channel filter off
-                                                mod_bass_channel[channel] = False
-                                            if param == 4:  # channel delay on (fast decay)
-                                                mod_delay_channel[channel] = True
-                                                mod_delay_channel_fast[channel] = True
-                                            if param == 5:  # channel delay on (slow decay)
-                                                mod_delay_channel[channel] = True
-                                                mod_delay_channel_fast[channel] = False
-                                            elif param == 6:  # channel delay off
-                                                mod_delay_channel[channel] = False
-                                            elif param == 7:  # sample reverse
-                                                mod_sample_reversed[channel] = True
-                                                mod_sample_reversed_flag[channel] = period > 0
-                                            elif param == 8:  # sample forwards
-                                                mod_sample_reversed[channel] = False
 
                                     if effect == 0x6:  # pattern loop
                                         if param == 0:  # set loop start
@@ -936,6 +919,29 @@ class Module:
                                                 mod_pattern_loop_counter[channel] = param + 1
                                     if effect == 0xe:  # pattern delay:
                                         mod_pattern_delay = param
+
+                                    mod_sample_reversed_flag[channel] = False
+                                    if effect == 0x0 and not self._legacy:  # pymod exclusive effects
+                                        if param == 2:  # bass channel filter on
+                                            mod_bass_channel[channel] = True
+                                            mod_using_bass_channel = True
+                                        elif param == 3:  # bass channel filter off
+                                            mod_bass_channel[channel] = False
+                                        if param == 4:  # channel delay on (fast decay)
+                                            mod_delay_channel[channel] = True
+                                            mod_delay_channel_fast[channel] = True
+                                            mod_using_delay_channel = True
+                                        if param == 5:  # channel delay on (slow decay)
+                                            mod_delay_channel[channel] = True
+                                            mod_delay_channel_fast[channel] = False
+                                            mod_using_delay_channel = True
+                                        elif param == 6:  # channel delay off
+                                            mod_delay_channel[channel] = False
+                                        elif param == 7:  # sample reverse
+                                            mod_sample_reversed[channel] = True
+                                            mod_sample_reversed_flag[channel] = period > 0
+                                        elif param == 8:  # sample forwards
+                                            mod_sample_reversed[channel] = False
 
                                 if not estimating_length:
                                     if sample_number > 0:  # is a sample playing?
@@ -1212,8 +1218,11 @@ class Module:
                                 mod_ticks_counter_actual = int((mod_ticks_counter / (mod_ms_per_tick * self._mod_ticks)) * self._mod_ticks)
                                 if not estimating_length:
                                     for channel in range(0, mod_channels):
-                                        mod_channel_byte_last[channel].insert(0, mod_channel_byte[channel])  # stores a "byte history" of sorts, inserting the last byte at the beginning, shifting the others over to the right
-                                        mod_channel_byte_last[channel].pop()  # remove the last element after insertion, keeping the list the same size
+                                        if mod_using_bass_channel:
+                                            mod_channel_byte_last[channel].insert(0, mod_channel_byte[channel])  # stores a "byte history" of sorts, inserting the last byte at the beginning, shifting the others over to the right
+                                            mod_channel_byte_last[channel].pop()  # remove the last element after insertion, keeping the list the same size
+                                        else:  # only the last byte is required for the filter "simulation"
+                                            mod_channel_byte_last[channel] = [mod_channel_byte[channel]]
 
                                         if mod_ticks_counter_actual_previous != mod_ticks_counter_actual or mod_ticks_counter == 0:  # on every tick (including the first)
                                             if mod_retrig_speed[channel] > 0:
@@ -1443,31 +1452,32 @@ class Module:
                                             channel_sum += channel_byte
 
                                         if not self._legacy:
-                                            if mod_delay_counter == mod_delay_length - 1:  # i programmed this delay myself, no references!!
-                                                mod_delay_counter = 0
-                                            else:
-                                                if mod_delay_channel[counter]:
-                                                    mod_channel_delay_buffer[counter][mod_delay_counter] += channel_byte
-                                                if mod_delay_channel_fast[counter]:
-                                                    delay_decay = 0.5
+                                            if mod_using_delay_channel:
+                                                if mod_delay_counter == mod_delay_length - 1:  # i programmed this delay myself, no references!!
+                                                    mod_delay_counter = 0
                                                 else:
-                                                    delay_decay = 0.8
-                                                mod_channel_delay_buffer[counter][mod_delay_counter] *= delay_decay
-                                            # reduce clicking
-                                            delayed_byte = 0
-                                            delay_filter_passes = 2
-                                            for delay_filter in range(0, delay_filter_passes):
-                                                delayed_byte += mod_channel_delay_buffer[counter][mod_delay_counter - delay_filter]
-                                            delayed_byte /= delay_filter_passes
-                                            delayed_byte *= 1.2  # make the delay a smidge louder
-                                            if not mod_delay_channel_fast[channel]:
-                                                delayed_byte *= 0.6  # reduce volume slightly for longer decays
-                                            delayed_byte = int(0 - delayed_byte)
-                                            if stereo:
-                                                channel_sum_right += delayed_byte  # delay only appears in the right channel - this is the intended behaviour! (it's a crude way of simulating stereo depth)
-                                            else:
-                                                channel_sum += delayed_byte
-                                            mod_delay_counter += 1
+                                                    if mod_delay_channel[counter]:
+                                                        mod_channel_delay_buffer[counter][mod_delay_counter] += channel_byte
+                                                    if mod_delay_channel_fast[counter]:
+                                                        delay_decay = 0.5
+                                                    else:
+                                                        delay_decay = 0.8
+                                                    mod_channel_delay_buffer[counter][mod_delay_counter] *= delay_decay
+                                                # reduce clicking
+                                                delayed_byte = 0
+                                                delay_filter_passes = 2
+                                                for delay_filter in range(0, delay_filter_passes):
+                                                    delayed_byte += mod_channel_delay_buffer[counter][mod_delay_counter - delay_filter]
+                                                delayed_byte /= delay_filter_passes
+                                                delayed_byte *= 1.2  # make the delay a smidge louder
+                                                if not mod_delay_channel_fast[channel]:
+                                                    delayed_byte *= 0.6  # reduce volume slightly for longer decays
+                                                delayed_byte = int(0 - delayed_byte)
+                                                if stereo:
+                                                    channel_sum_right += delayed_byte  # delay only appears in the right channel - this is the intended behaviour! (it's a crude way of simulating stereo depth)
+                                                else:
+                                                    channel_sum += delayed_byte
+                                                mod_delay_counter += 1
 
                                     if stereo:
                                         if channel_sum_left > 32767:
@@ -1648,8 +1658,8 @@ class Module:
 
                 if self._render_file is not None:
                     end_time = time.perf_counter() - start_time
-                    minutes = int(end_time / 60)  # for some reason it was giving me 1.0 even though it's integer division :/
-                    seconds = int(end_time % 60)
+                    minutes = int(end_time / 60)
+                    seconds = end_time % 60
                     if not self._quiet:
                         print()
                         stringy = "Rendered in "
@@ -1657,11 +1667,11 @@ class Module:
                             if seconds == 1:
                                 stringy += "1 second!"
                             else:
-                                stringy += f"{seconds} seconds!"
+                                stringy += f"{seconds:.2f} seconds!"
                         elif minutes == 1:
-                            stringy += f"1 minute, {seconds} seconds!"
+                            stringy += f"1 minute, {seconds:.2f} seconds!"
                         else:
-                            stringy += f"{minutes} minutes, {seconds} seconds!"
+                            stringy += f"{minutes} minutes, {seconds:.2f} seconds!"
                         print(stringy)
                 else:
                     if self._play_mode != "info":

@@ -25,11 +25,13 @@
 	* A sample number by itself will change the currently looping sample. So if another sample number is encountered while a sample is looping, the loop of the other sample will be played (starting from its loop point) once the current one has reached the loop end point
 	* If a sample's loop starts at 0, it should first play through all the way (including after the loop end) before playing the looped section
 * Sample summing is now handled sensibly (bytes are only converted once all bytes are summed together)
+	* The volume is reduced per-channel instead of overall
 * The current progress is now shown while rendering (as a percentage)
 	* When playing, this remaining time will be shown alongside the elapsed time
 * The estimated length of the module is now shown when viewing the module info!
 * Sample rate is now optional, and defaults to 44100 Hz
 * Sample interpolation has now been added as an option, resulting in much cleaner samples!
+* Rendering time now displays the seconds to 2 decimal places
 
 ### Legacy mode
 An option new to version 1.1.0, this mode enforces many of ProTracker 2.3's quirks.

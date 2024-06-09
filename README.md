@@ -29,6 +29,7 @@ An Amiga module player/renderer written in Python! It uses PyAudio for real-time
 	* 4 channel modules only
 * An extended note range for modules not made using ProTracker (two extra octaves!)
 * Extra effects exclusive to Pymod
+* Interpolated sample playback
 
 ## Installation
 Pymod requires at least [Python](https://python.org) 3.8. You can install it by installing [pip](https://packaging.python.org/en/latest/tutorials/installing-packages/) and typing the following in a terminal window:
