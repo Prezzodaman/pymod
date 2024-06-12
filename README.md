@@ -63,6 +63,7 @@ pymod <options> <path to .mod file> <play mode>
 	* `--verbose (-v)` : If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.
 	* `--channels (-c)` : Renders each channel to its own file. If playing, this does nothing.
 	* `--buffer <buffer size> (-b)` : Change the buffer size for realtime playback (default is 1024)
+	* `--legacy (-l)` : Enforces the quirks of ProTracker 2.3.
 	* `--quiet (-q)` : Shows absolutely no info while playing/rendering a module.
 	* `--amplify <factor> (-a)` : Amplifies the output volume by a certain factor, useful for modules with lots of channels. 1 is normal volume, 2 is double volume, 0.5 is half volume, etc.
 	* `--interpolate (-i)` : Use linear interpolation when playing back samples, resulting in a smoother, cleaner sound.
@@ -96,11 +97,12 @@ The `Module` instance also has these methods:
 - `set_play_mode(<play_mode>)` : Set the play mode (<play_mode> is a string containing one of the play modes listed above)
 - `set_verbose(<flag>)` : If playing, this displays the pattern as it's being played. If rendering, this shows the progress of each pattern.
 - `set_buffer_size(<size>)` : Change the buffer size for realtime playback (default is 1024).
+- `set_legacy(<flag>)` : If true, this enforces the quirks of ProTracker 2.3.
 - `set_quiet(<flag>)` : If true, this shows absolutely no info while playing/rendering a module.
 - `set_amplify(<factor>)` : Amplifies the output volume by a certain factor.
-- `set_interpolate(<flag>)` : Use linear interpolation when playing back samples.
+- `set_interpolate(<flag>)` : If true, this uses linear interpolation when playing back samples.
 
-By default, the sample rate is 44100 Hz and the play mode is mono. These can be changed on init by specifying the optional arguments `sample_rate` and `play_mode`. `verbose`, `quiet`, `amplify` and `interpolate` can also be specified as arguments.
+By default, the sample rate is 44100 Hz and the play mode is mono. These can be changed on init by specifying the optional arguments `sample_rate` and `play_mode`. `verbose`, `legacy`, `quiet`, `amplify` and `interpolate` can also be specified as arguments.
 
 ## Unit testing
 Unit tests can be run by using `pytest`. These tests run against a set of pre-generated wav files to make sure that the output is consistent across changes.
@@ -163,6 +165,8 @@ Note: in legacy mode, these will do nothing!
 * **E06** - Pseudo-reverb off
 * **E07** - Play sample backwards
 * **E08** - Play sample forwards
+* **E09** - Interpolation on
+* **E0A** - Interpolation off
 
 ## Thanks
 * **The developers of OpenMPT** - For getting me started tracking way back in 2016, and making the one piece of software I use every day for all of my music (I owe a lot to you!)

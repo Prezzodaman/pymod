@@ -32,6 +32,7 @@
 * Sample rate is now optional, and defaults to 44100 Hz
 * Sample interpolation has now been added as an option, resulting in much cleaner samples!
 * Rendering time now displays the seconds to 2 decimal places
+* When rendering in verbose mode, the kilobytes per second is displayed!
 
 ### Legacy mode
 An option new to version 1.1.0, this mode enforces many of ProTracker 2.3's quirks.
@@ -70,6 +71,7 @@ The quirks mentioned below are only affected in legacy mode, otherwise, they beh
 * Fixed the offset effect being 255 bytes behind
 * Fixed the note delay effect when a sample offset's been set already (see the test module "offsetdelay.mod")
 * Fixed sample swapping behaviour with empty samples
+* Fixed the finetune when using the arpeggio effect
 
 ### To do
 * Perhaps figure out a way of rendering only a few samples (small buffer size) at a time, allowing for real-time playback to be used alongside other Python code

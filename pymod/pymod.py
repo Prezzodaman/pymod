@@ -456,7 +456,7 @@ class Module:
             print("Error: Invalid module!")
             if self._render_file is not None:
                 os.remove(self._render_file)
-        elif self._sample_rate < sample_rate_minimum or self._sample_rate > 380000:
+        elif sample_rate_temp < sample_rate_minimum or sample_rate_temp > 380000:
             print(f"Error: Sample rate must be between {sample_rate_minimum} and 380000!")
             if self._render_file is not None:
                 os.remove(self._render_file)
@@ -693,6 +693,11 @@ class Module:
                     mod_sample_reversed = [False] * mod_channels  # pymod exclusive feature: use the effect e07 to play a sample in reverse (or e08 to play it forwards again)
                     mod_sample_reversed_flag = [False] * mod_channels
                     mod_delay_channel_fast = [False] * mod_channels
+                    if self._interpolate:
+                        mod_interpolate_channel = [True] * mod_channels
+                    else:
+                        mod_interpolate_channel = [False] * mod_channels  # pymod exclusive feature: use the effect e09 to turn on interpolation for a channel, and e0a to turn it off
+
                     mod_loop_play_full = [False] * mod_channels  # if this is false, the sample's loop will play as expected. if the sample is looping but the loop starts at 0, this will be true, meaning the whole sample will have to play through before looping
                     mod_sample_number_cued = [0] * mod_channels  # the next sample to be played once a loop's finished, if another sample number is specified (if a sample is just being played normally from the start, this should match mod_sample_number!)
                     mod_offset_flag = [False] * mod_channels
@@ -744,36 +749,42 @@ class Module:
                                     percentage_string = ""
                                 if not estimating_length:
                                     current_time = time.perf_counter()
-                                    time_elapsed = int(current_time - start_time)
-                                    time_elapsed_minutes = time_elapsed // 60
-                                    time_elapsed_seconds = time_elapsed % 60
+                                    time_elapsed = current_time - start_time
+                                    time_elapsed_minutes = int(time_elapsed / 60)
+                                    time_elapsed_seconds = int(time_elapsed % 60)
                                     time_elapsed_string = f"{time_elapsed_minutes}m {time_elapsed_seconds}s".ljust(6, " ")
                                     if estimate:
-                                        time_remaining = int(estimated_length) - time_elapsed
+                                        time_remaining = int(estimated_length) - int(time_elapsed)
                                         if time_remaining < 0:  # man, that accuracy
                                             time_remaining = 0
                                         time_remaining_minutes = time_remaining // 60
                                         time_remaining_seconds = time_remaining % 60
                                         time_elapsed_string += "(-" + f"{time_remaining_minutes}m {time_remaining_seconds}s".rjust(6, " ") + ")"
 
-                            line_string = ""
-                            loop_string = ""
-                            if self._loops > 1 or self._render_channels:
-                                loop_string = " ("
-                            if self._loops > 1:
-                                loop_string += f"loop {mod_loops + 1}/{self._loops}"
+                            if not estimating_length:
+                                line_string = ""
+                                loop_string = ""
+                                if self._loops > 1 or self._render_channels:
+                                    loop_string = " ("
+                                if self._loops > 1:
+                                    loop_string += f"loop {mod_loops + 1}/{self._loops}"
+                                    if self._render_channels:
+                                        loop_string += ", "
                                 if self._render_channels:
-                                    loop_string += ", "
-                            if self._render_channels:
-                                loop_string += f"channel {channel_current + 1}"
-                            if self._loops > 1 or self._render_channels:
-                                loop_string += ")"
-                            if self._render_file is not None and not self._quiet and not estimating_length:
+                                    loop_string += f"channel {channel_current + 1}"
                                 if self._verbose:
-                                    rendering_string = f"Rendering{percentage_string}: Order {mod_order_position}/{mod_song_length - 1}, Pattern {mod_order[mod_order_position]}, Line {mod_line + 1}{loop_string}   "
-                                else:
-                                    rendering_string = f"Rendering order {mod_order_position}/{mod_song_length - 1}{loop_string}{percentage_string}...   "
-                                print(rendering_string, end="\r")
+                                    loop_string += ", "
+                                    bytes_per_second = mod_bytes_rendered / time_elapsed
+                                    kilobytes_per_second = bytes_per_second / 1000
+                                    loop_string += f"{kilobytes_per_second:.2f} kbps"
+                                if self._loops > 1 or self._render_channels:
+                                    loop_string += ")"
+                                if self._render_file is not None and not self._quiet:
+                                    if self._verbose:
+                                        rendering_string = f"Rendering{percentage_string}: Order {mod_order_position}/{mod_song_length - 1}, Pattern {mod_order[mod_order_position]}, Line {mod_line + 1}{loop_string}   "
+                                    else:
+                                        rendering_string = f"Rendering order {mod_order_position}/{mod_song_length - 1}{loop_string}{percentage_string}...   "
+                                    print(rendering_string, end="\r")
 
                             mod_pattern_delay_encountered = False
                             for channel in range(0, mod_channels):
@@ -922,26 +933,30 @@ class Module:
 
                                     mod_sample_reversed_flag[channel] = False
                                     if effect == 0x0 and not self._legacy:  # pymod exclusive effects
-                                        if param == 2:  # bass channel filter on
+                                        if param == 0x2:  # bass channel filter on
                                             mod_bass_channel[channel] = True
                                             mod_using_bass_channel = True
-                                        elif param == 3:  # bass channel filter off
+                                        elif param == 0x3:  # bass channel filter off
                                             mod_bass_channel[channel] = False
-                                        if param == 4:  # channel delay on (fast decay)
+                                        elif param == 0x4:  # channel delay on (fast decay)
                                             mod_delay_channel[channel] = True
                                             mod_delay_channel_fast[channel] = True
                                             mod_using_delay_channel = True
-                                        if param == 5:  # channel delay on (slow decay)
+                                        elif param == 0x5:  # channel delay on (slow decay)
                                             mod_delay_channel[channel] = True
                                             mod_delay_channel_fast[channel] = False
                                             mod_using_delay_channel = True
-                                        elif param == 6:  # channel delay off
+                                        elif param == 0x6:  # channel delay off
                                             mod_delay_channel[channel] = False
-                                        elif param == 7:  # sample reverse
+                                        elif param == 0x7:  # sample reverse
                                             mod_sample_reversed[channel] = True
                                             mod_sample_reversed_flag[channel] = period > 0
-                                        elif param == 8:  # sample forwards
+                                        elif param == 0x8:  # sample forwards
                                             mod_sample_reversed[channel] = False
+                                        elif param == 0x9:  # channel interpolation on
+                                            mod_interpolate_channel[channel] = True
+                                        elif param == 0xa:  # channel interpolation off
+                                            mod_interpolate_channel[channel] = False
 
                                 if not estimating_length:
                                     if sample_number > 0:  # is a sample playing?
@@ -1015,6 +1030,7 @@ class Module:
                                         if mod_effect_param[channel] > 0:  # 0 means ignore
                                             mod_arp_counter[channel] = 0  # reset the counter every time the effect is encountered
                                             period_note = Module._mod_get_period_note(mod_arp_period[channel], self._legacy)
+                                            sample_finetune = mod_finetune_temp[channel]
                                             sample_finetune_temp = sample_finetune
                                             sample_finetune_temp_changed = False  # so the finetune isn't repeatedly increased
 
@@ -1029,7 +1045,11 @@ class Module:
                                                     mod_arp_periods[channel][1] = 0  # don't play the note at all
                                                 else:
                                                     if period_1 > mod_period_amount:
-                                                        sample_finetune_temp = (sample_finetune_temp + 1) % len(Module._mod_legacy_periods)  # when a wraparound occurs, the finetune is increased by one, because on the amiga, the period table is stored as one long list, so it reaches the lowest note of the finetune next to the one used with the current sample!
+                                                        sample_finetune_temp += 1  # when a wraparound occurs, the finetune is increased by one, because on the amiga, the period table is stored as one long list, so it reaches the lowest note of the finetune next to the one used with the current sample!
+                                                        if self._legacy:
+                                                            sample_finetune_temp %= len(Module._mod_legacy_periods)
+                                                        else:
+                                                            sample_finetune_temp %= len(Module._mod_extended_periods)
                                                         sample_finetune_temp_changed = True
                                                         period_1 -= mod_period_amount
                                                     if self._legacy:
@@ -1048,8 +1068,12 @@ class Module:
                                                     mod_arp_periods[channel][2] = 0
                                                 else:
                                                     if period_2 > mod_period_amount:
-                                                        if not sample_finetune_temp_changed:
-                                                            sample_finetune_temp = (sample_finetune_temp + 1) % len(Module._mod_legacy_periods)  # no need to set the flag here since it's the last of the 2 periods!
+                                                        if not sample_finetune_temp_changed:  # no need to set the flag here since it's the last of the 2 periods!
+                                                            sample_finetune_temp += 1
+                                                            if self._legacy:
+                                                                sample_finetune_temp %= len(Module._mod_legacy_periods)
+                                                            else:
+                                                                sample_finetune_temp %= len(Module._mod_extended_periods)
                                                         period_2 -= mod_period_amount
                                                     if self._legacy:
                                                         mod_arp_periods[channel][2] = Module._mod_legacy_periods[sample_finetune_temp][period_2]
@@ -1100,9 +1124,12 @@ class Module:
                                             mod_volslide_amount[channel] = 0 - mod_effect_param[channel]
 
                                     if mod_effect_number[channel] == 0xc:  # set volume
-                                        mod_sample_volume[channel] = mod_effect_param[channel]
-                                        if mod_sample_volume[channel] > 64:
-                                            mod_sample_volume[channel] = 64
+                                        if mod_sample_number[channel] == 32:
+                                            mod_sample_volume[channel] = 0
+                                        else:
+                                            mod_sample_volume[channel] = mod_effect_param[channel]
+                                            if mod_sample_volume[channel] > 64:
+                                                mod_sample_volume[channel] = 64
 
                                     # the offset effect has a very specific behaviour in protracker:
                                     # * only change the offset if the effect is either on its own or alongside a sample number/period
@@ -1169,10 +1196,8 @@ class Module:
                                             if mod_vibrato_retrigger[channel]:
                                                 mod_vibrato_counter[channel] = 0
 
-                                    if mod_arp_periods[channel] != [0, 0, 0]:
-                                        for a in range(0, 3):
-                                            if mod_arp_periods[channel][a] > 0:  # if the period is 0, it'll be missed entirely (in _mod_get_frequency)
-                                                mod_arp_periods[channel][a] = Module._mod_get_finetune_period(mod_arp_periods[channel][a], mod_finetune_temp[channel], self._legacy)
+                                    # i was finding the finetuned version of a finetuned period... again
+                                    # ...words can't describe the way i exhaled when i realized this
 
                                     if self._render_file is None:
                                         if self._verbose:
@@ -1394,7 +1419,7 @@ class Module:
                                             if sample_byte_position > len(mod_file) - 1:
                                                 sample_byte_position = len(mod_file) - 1
                                             sample_byte = (mod_file[sample_byte_position] + 128) & 255  # sample byte converted to an unsigned value
-                                            if self._interpolate:
+                                            if mod_interpolate_channel[channel]:
                                                 # source: none, i stayed up until half 2 coding this "algorithm" in bed ;)
                                                 sample_position_mod = mod_sample_position[channel] % 1  # current position between 0.0 and 0.9 recurring
                                                 if sample_byte_position + 1 > len(mod_file) - 1:
