@@ -68,7 +68,7 @@ The quirks mentioned below are only affected in legacy mode, otherwise, they beh
 	* Fixed loop detection when breaking to a line that's already been visited (fixes the test modules "line.mod" and "volslide2.mod")
 * Fixed a slight bug in the offset effect (see the test module "offsetness.mod")
 * Mono renders are no longer extremely quiet
-* Fixed the offset effect being 255 bytes behind
+* Fixed the offset effect multiplying by 255 instead of 256
 * Fixed the note delay effect when a sample offset's been set already (see the test module "offsetdelay.mod")
 * Fixed sample swapping behaviour with empty samples
 * Fixed the finetune when using the arpeggio effect

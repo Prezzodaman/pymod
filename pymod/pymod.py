@@ -1141,7 +1141,7 @@ class Module:
                                     mod_offset_delay_flag[channel] = False
                                     if mod_effect_number[channel] == 0x9:  # set offset
                                         if mod_effect_param[channel] > 0:
-                                            mod_offset_memory[channel] = (mod_effect_param[channel] * 255) + 255
+                                            mod_offset_memory[channel] = mod_effect_param[channel] * 256  # it's * 256 NOT 255!!!
                                             if mod_offset_memory[channel] > mod_samples[mod_sample_number[channel] - 1]["length"]:
                                                 mod_offset_memory[channel] = mod_samples[mod_sample_number[channel] - 1]["length"]
 
@@ -1195,6 +1195,9 @@ class Module:
                                         if mod_raw_period[channel] > 0:
                                             if mod_vibrato_retrigger[channel]:
                                                 mod_vibrato_counter[channel] = 0
+
+                                    if mod_effect_number[channel] == 0x3 and mod_raw_period[channel] > 0 and mod_samples[mod_sample_number[channel] - 1]["length"] > 0:
+                                        mod_sample_playing[channel] = True
 
                                     # i was finding the finetuned version of a finetuned period... again
                                     # ...words can't describe the way i exhaled when i realized this
