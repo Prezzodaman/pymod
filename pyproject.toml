@@ -24,6 +24,8 @@ dynamic = ["version"]
 
 [project.urls]
 Homepage = "https://verycheapwebsite.rf.gd/pymod"
+"Source Code" = "https://github.com/Prezzodaman/pymod"
+"Bug Tracker" = "https://github.com/Prezzodaman/pymod/issues"
 
 [tool.hatch.version]
 path = "pymod/__about__.py"
