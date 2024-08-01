@@ -19,13 +19,14 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = ["pyaudio"]
-
 dynamic = ["version"]
 
 [project.urls]
 Homepage = "https://verycheapwebsite.rf.gd/pymod"
 "Source Code" = "https://github.com/Prezzodaman/pymod"
 "Bug Tracker" = "https://github.com/Prezzodaman/pymod/issues"
+
+[tool.setuptools_scm]
 
 [tool.hatch.version]
 path = "pymod/__about__.py"
