@@ -34,7 +34,7 @@ path = "pymod/__about__.py"
 exclude = ["tests"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["pymod-amiga"]
+packages = ["pymod"]
 
 [tool.hatch.envs.default]
 dependencies = [ "pytest", "pytest-cov" ]
