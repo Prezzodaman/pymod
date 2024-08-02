@@ -1401,10 +1401,9 @@ class Module:
                                                 mod_note_delay_ticks[channel] -= 1
                                                 if mod_note_delay_ticks[channel] == 0:  # note delay finished?
                                                     mod_note_delay_ticks[channel] = -1
-                                                    if mod_samples[sample_number]["loop_length"] > 2:  # sample looping?
-                                                        mod_period[channel] = mod_next_period[channel]  # just change the period without restarting the sample
-                                                        mod_frequency[channel] = Module._mod_get_frequency(mod_period[channel])
-                                                    else:
+                                                    mod_period[channel] = mod_next_period[channel]  # just change the period without restarting the sample
+                                                    mod_frequency[channel] = Module._mod_get_frequency(mod_period[channel])
+                                                    if mod_samples[sample_number]["loop_length"] <= 2:  # sample NOT looping?
                                                         if mod_offset_delay_flag[channel]:
                                                             mod_sample_position[channel] = mod_offset_memory[channel]
                                                         else:
@@ -1414,6 +1413,9 @@ class Module:
                                             elif mod_note_delay_ticks[channel] == -2:  # previously specified delay command greater than the ticks per line?
                                                 mod_note_delay_ticks[channel] = -1  # the note didn't play, so reset tick counter
                                                 # this works because there are explicit checks to only play the note if the tick counter has reached -1!!
+
+                                        if mod_sample_offset[channel] == 0:
+                                            mod_sample_volume[channel] = 0  # slightly janky way of not playing samples if no offset is specified!
 
                                         sample_step_rate = mod_frequency[channel] / self._sample_rate
 

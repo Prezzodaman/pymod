@@ -1,3 +1,12 @@
+## 1.1.2
+### Bug fixes
+* Fixed a bug where the initial playback of a sample alongside a note delay was at the wrong speed (fixes the vocal in H0ffman's "Professional Tracker")
+* Fixed a bug when playing a note before specifying a sample number, resulting in glitched noise
+
+## 1.1.1
+* Changed the package name, so Pymod can actually be installed for other users!
+* The version's only increased so PyPI is happy ;)
+
 ## 1.1.0
 ### General notes
 * Pymod is now a PyPI compatible module (!) and split into multiple source files
