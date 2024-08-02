@@ -399,6 +399,8 @@ class Module:
         self._buffer_size = Module.buffer_size_default()
         self._mod_tempo = 125
         self._mod_ticks = 6
+        self._mod_position_start = 0
+        self._nb_of_patterns_to_play = -1
 
     # https://modarchive.org/forums/index.php?topic=2709.0
     def _mod_get_tempo_length(self):
@@ -721,8 +723,15 @@ class Module:
                     mod_position_break = False
                     mod_line_break = False
 
-                    mod_order_position = 0
-                    mod_pointer = mod_pattern_offsets[mod_order[mod_order_position]]
+                    mod_order_position = self._mod_position_start
+                    if mod_order_position < mod_song_length:
+                        mod_pointer = mod_pattern_offsets[mod_order[mod_order_position]]
+                    else:
+                        # start position is past the last position so we just set the position to 0, it will not be played anyway
+                        mod_pointer = mod_pattern_offsets[mod_order[0]]
+
+                    mod_patterns_left_to_play = self._nb_of_patterns_to_play
+
                     mod_line = 0
                     mod_loops = 0  # different to the "loops" variable, this increases until it reaches "loops"
                     mod_bpm = 0  # calculated from the tempo and ticks/line (only used for a visual indicator)
@@ -736,7 +745,10 @@ class Module:
                             while_condition = channel_current < mod_channels - 1
                         else:
                             while_condition = False
-                    while mod_order_position < mod_song_length:
+                    while mod_order_position < mod_song_length and mod_patterns_left_to_play != 0:
+                        if mod_patterns_left_to_play > 0:
+                            mod_patterns_left_to_play -= 1
+
                         while mod_line < mod_lines:
                             if not self._quiet:
                                 if estimate and not estimating_length:
@@ -1762,6 +1774,12 @@ class Module:
 
     def set_interpolate(self, flag):
         self._interpolate = flag
+
+    def set_start_pos(self, position):
+        self._mod_position_start = position
+
+    def set_nb_of_patterns(self, nb_of_patterns):
+        self._nb_of_patterns_to_play = nb_of_patterns
 
     def play(self):
         self._run()
