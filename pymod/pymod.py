@@ -816,6 +816,8 @@ class Module:
                                     mod_raw_period[channel] = period
                                     mod_raw_period_inc_delay[channel] = period
                                     sample_number = (mod_file[mod_pointer] & 0xf0) + (mod_file[mod_pointer + 2] >> 4)
+                                    if sample_number > mod_samples_amount:
+                                        sample_number = 0
                                     mod_port_amount[channel] = 0
                                     mod_volslide_amount[channel] = 0
                                 else:
