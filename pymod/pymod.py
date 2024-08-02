@@ -394,7 +394,7 @@ class Module:
 
         # these are just defaults
         self._render_file = None
-        self._loops_init = 1
+        self._loops = 1
         self._render_channels = False
         self._buffer_size = Module.buffer_size_default()
         self._mod_tempo = 125
@@ -403,14 +403,10 @@ class Module:
         self._nb_of_patterns_to_play = -1
 
     # https://modarchive.org/forums/index.php?topic=2709.0
-    def _mod_get_tempo_length(self):
-        return (2500 / self._mod_tempo) * (self._sample_rate / 1000)
+    def _mod_get_tempo_length(self, mod_tempo):
+        return (2500 / mod_tempo) * (self._sample_rate / 1000)
 
     def _run(self):
-        self._mod_tempo = 125
-        self._mod_ticks = 6
-        self._loops = self._loops_init
-
         if not self._quiet:
             print(f"Pymod v{__version__}")
             print("by Presley Peters, 2023-present")
@@ -422,8 +418,6 @@ class Module:
         sample_rate_minimum = 1000
         sample_rate_temp = self._sample_rate
         self._sample_rate = sample_rate_minimum  # using an extremely low sample rate for the estimation since it's WAY quicker, and gives basically the same result when you times it up (it's accurate enough for percentages and time estimates, so there's that!)
-        mod_ms_per_tick = self._mod_get_tempo_length()
-        mod_ticks_counter = 0
 
         mod_channels = 0
         mod_type = ""
@@ -603,10 +597,12 @@ class Module:
                 estimated_length_minutes = 0
                 estimated_length_seconds = 0
 
+                total_nb_of_loops = self._loops
+
                 if self._play_mode == "info":
                     if not estimate:
                         while_condition = False
-                    self._loops = 1
+                    total_nb_of_loops = 1
                 while while_condition:
                     mod_jumps = [[0, 0]]
                     mod_orders_visited = []
@@ -733,8 +729,11 @@ class Module:
                     mod_patterns_left_to_play = self._nb_of_patterns_to_play
 
                     mod_line = 0
-                    mod_loops = 0  # different to the "loops" variable, this increases until it reaches "loops"
+                    mod_current_loop = 0  # different to the "loops" variable, this increases until it reaches "loops"
                     mod_bpm = 0  # calculated from the tempo and ticks/line (only used for a visual indicator)
+                    mod_tempo = self._mod_tempo
+                    mod_ms_per_tick = self._mod_get_tempo_length(self._mod_tempo)
+                    mod_ticks = self._mod_ticks
 
                     sample_byte = 0
 
@@ -776,10 +775,10 @@ class Module:
                             if not estimating_length:
                                 line_string = ""
                                 loop_string = ""
-                                if self._loops > 1 or self._render_channels:
+                                if total_nb_of_loops > 1 or self._render_channels:
                                     loop_string = " ("
-                                if self._loops > 1:
-                                    loop_string += f"loop {mod_loops + 1}/{self._loops}"
+                                if total_nb_of_loops > 1:
+                                    loop_string += f"loop {mod_current_loop + 1}/{total_nb_of_loops}"
                                     if self._render_channels:
                                         loop_string += ", "
                                 if self._render_channels:
@@ -789,7 +788,7 @@ class Module:
                                     bytes_per_second = mod_bytes_rendered / time_elapsed
                                     kilobytes_per_second = bytes_per_second / 1000
                                     loop_string += f"{kilobytes_per_second:.2f} kbps"
-                                if self._loops > 1 or self._render_channels:
+                                if total_nb_of_loops > 1 or self._render_channels:
                                     loop_string += ")"
                                 if self._render_file is not None and not self._quiet:
                                     if self._verbose:
@@ -805,10 +804,10 @@ class Module:
                                     effect_param = mod_file[mod_pointer + 3]
                                     if effect_number == 0xf:  # set tempo/ticks (checked for all channels for the note delay - fixes the weird behaviour in ode2ptk - hey, that rhymes)
                                         if effect_param < 32:
-                                            self._mod_ticks = effect_param
+                                            mod_ticks = effect_param
                                         else:
-                                            self._mod_tempo = effect_param
-                                            mod_ms_per_tick = self._mod_get_tempo_length()
+                                            mod_tempo = effect_param
+                                            mod_ms_per_tick = self._mod_get_tempo_length(mod_tempo)
                                     if effect_number == 0xe and effect_param >> 4 == 0xe and self._legacy:  # pattern delay and line breaks (should this be part of legacy mode?)
                                         mod_next_line_offset = True
                                         mod_pattern_delay_encountered = True
@@ -866,7 +865,7 @@ class Module:
                                         mod_finetune_temp[channel] = mod_samples[sample_number - 1]["finetune"]
 
                                 if sample_number > 0:
-                                    mod_ticks_per_beat = self._mod_ticks * 4  # formula taken from the openmpt source code! (sndfile.cpp)
+                                    mod_ticks_per_beat = mod_ticks * 4  # formula taken from the openmpt source code! (sndfile.cpp)
                                     mod_samples_per_beat = mod_ms_per_tick * mod_ticks_per_beat
                                     mod_bpm = (self._sample_rate / mod_samples_per_beat) * 60
 
@@ -879,13 +878,13 @@ class Module:
                                             if param == 0:  # ec0 is equivalent to c00
                                                 mod_sample_volume[channel] = 0
                                             else:
-                                                if param >= self._mod_ticks:  # if the cut amount is the same as the ticks per line, the note plays normally
+                                                if param >= mod_ticks:  # if the cut amount is the same as the ticks per line, the note plays normally
                                                     mod_note_cut_ticks[channel] = -1
                                                 else:
                                                     mod_note_cut_ticks[channel] = param
                                         mod_note_delay_ticks[channel] = -1  # no note delay effect, reset it
                                         if effect == 0xd:  # note delay
-                                            if param >= self._mod_ticks:  # if the delay amount is the same as the ticks per line, the note is ignored
+                                            if param >= mod_ticks:  # if the delay amount is the same as the ticks per line, the note is ignored
                                                 mod_note_delay_ticks[channel] = -2  # pro coder skillz
                                             else:
                                                 mod_note_delay_ticks[channel] = param
@@ -1236,8 +1235,8 @@ class Module:
 
                             if self._render_file is None and not estimating_length:
                                 if self._verbose:
-                                    if self._loops > 1:
-                                        line_string += f" ({mod_loops+1}/{self._loops})"
+                                    if total_nb_of_loops > 1:
+                                        line_string += f" ({mod_current_loop+1}/{total_nb_of_loops})"
                                     order_position_string = str(mod_order_position).zfill(3) + "/" + str(mod_song_length - 1).zfill(3)
                                     pattern_string = str(mod_order[mod_order_position]).zfill(3)
                                     line_number_string = str(mod_line).zfill(2)
@@ -1245,19 +1244,19 @@ class Module:
                                         print(f"O{order_position_string}, P{pattern_string}, L{line_number_string}:|{line_string} {time_elapsed_string}")
                                 else:
                                     if not self._quiet:
-                                        if self._loops > 1:
-                                            loops_string = f", Loop: {mod_loops + 1}/{self._loops}"
+                                        if total_nb_of_loops > 1:
+                                            loops_string = f", Loop: {mod_current_loop + 1}/{total_nb_of_loops}"
                                         else:
                                             loops_string = ""
-                                        print(f"Time elapsed: {time_elapsed_string}, Tempo: {self._mod_tempo}, Ticks/Line: {self._mod_ticks}, BPM: {'%g' % mod_bpm}, Order {mod_order_position}/{mod_song_length - 1}, Pattern {mod_order[mod_order_position]}, Line {(mod_line + 1)}{loops_string}        ", end="\r")
+                                        print(f"Time elapsed: {time_elapsed_string}, Tempo: {mod_tempo}, Ticks/Line: {mod_ticks}, BPM: {'%g' % mod_bpm}, Order {mod_order_position}/{mod_song_length - 1}, Pattern {mod_order[mod_order_position]}, Line {(mod_line + 1)}{loops_string}        ", end="\r")
 
                             mod_ticks_counter = 0
                             mod_ticks_counter_actual = 0  # the actual tick counter (e.g. by default this'll be from 0-5)
                             mod_ticks_counter_actual_previous = 0
 
-                            while mod_ticks_counter < mod_ms_per_tick * self._mod_ticks:
+                            while mod_ticks_counter < mod_ms_per_tick * mod_ticks:
                                 mod_ticks_counter_actual_previous = mod_ticks_counter_actual
-                                mod_ticks_counter_actual = int((mod_ticks_counter / (mod_ms_per_tick * self._mod_ticks)) * self._mod_ticks)
+                                mod_ticks_counter_actual = int((mod_ticks_counter / (mod_ms_per_tick * mod_ticks)) * mod_ticks)
                                 if not estimating_length:
                                     for channel in range(0, mod_channels):
                                         if mod_using_bass_channel:
@@ -1576,7 +1575,7 @@ class Module:
                                     if not mod_line_break:  # position break on its own?
                                         mod_next_line = 0  # if so, reset to beginning of pattern
                                         if mod_next_position == mod_order_position:  # if a position breaks to itself without a line break, that counts as a loop
-                                            mod_loops += 1
+                                            mod_current_loop += 1
                                             mod_looped = True
                                     mod_pointer = mod_pattern_offsets[mod_order[mod_next_position]] + (mod_next_line * 4 * mod_channels)
                                     mod_order_position = mod_next_position  # change current order
@@ -1608,11 +1607,11 @@ class Module:
                                                 mod_order_position = 0
                                                 if not mod_looped:
                                                     mod_looped = True
-                                                    mod_loops += 1
+                                                    mod_current_loop += 1
                                         if [mod_order_position, mod_next_line] in mod_lines_visited:
                                             if not mod_looped:
                                                 mod_looped = True
-                                                mod_loops += 1
+                                                mod_current_loop += 1
                                     mod_line = mod_next_line
                                     mod_pointer = mod_pattern_offsets[mod_order[mod_order_position]] + (mod_next_line * 4 * mod_channels)
 
@@ -1620,21 +1619,21 @@ class Module:
                                     if [mod_order_position, mod_line] in mod_jumps:  # has this specific line and order been visited before?
                                         if not mod_looped:
                                             mod_looped = True
-                                            mod_loops += 1
+                                            mod_current_loop += 1
                                         mod_jumps = [[mod_order_position, mod_line]]  # fixes "delayskip.mod" - probably not correct, but it works
                                         mod_orders_visited.clear()
                                     else:
                                         if mod_order_position in mod_orders_visited:  # has this order been visited before? (used for position jumps determining the loop point)
                                             if not mod_looped:
                                                 mod_looped = True
-                                                mod_loops += 1
+                                                mod_current_loop += 1
                                             mod_orders_visited.clear()
                                         mod_jumps.append([mod_order_position, mod_line])
 
                                 mod_position_break = False
                                 mod_line_break = False
 
-                                if mod_loops > self._loops - 1:
+                                if mod_current_loop > total_nb_of_loops - 1:
                                     mod_order_position = mod_song_length  # end
                                     mod_line = mod_lines
 
@@ -1655,14 +1654,14 @@ class Module:
                                 mod_line = 0
                                 if not mod_looped:
                                     mod_looped = True
-                                    mod_loops += 1
+                                    mod_current_loop += 1
                                     mod_jumps.clear()
                                     mod_orders_visited.clear()
                         else:
                             if not mod_looped:
                                 mod_looped = True
-                                mod_loops += 1
-                        if mod_loops > self._loops - 1:  # copypasta SSSSHHHHH (but this is for when the pattern ends, not per line... so if you're line breaking/position breaking this won't be reached)
+                                mod_current_loop += 1
+                        if mod_current_loop > total_nb_of_loops - 1:  # copypasta SSSSHHHHH (but this is for when the pattern ends, not per line... so if you're line breaking/position breaking this won't be reached)
                             mod_order_position = mod_song_length  # end
                             mod_line = mod_lines
                         mod_pointer = mod_pattern_offsets[mod_order[mod_order_position]]
@@ -1696,7 +1695,7 @@ class Module:
                         if self._play_mode == "info":
                             while_condition = False
                         self._sample_rate = sample_rate_temp
-                        mod_ms_per_tick = self._mod_get_tempo_length()
+                        mod_ms_per_tick = self._mod_get_tempo_length(mod_tempo)
 
                 if self._render_file is not None:
                     end_time = time.perf_counter() - start_time
@@ -1752,7 +1751,7 @@ class Module:
         self._sample_rate = rate
 
     def set_nb_of_loops(self, nb_of_loops):
-        self._loops_init = nb_of_loops
+        self._loops = nb_of_loops
 
     def set_play_mode(self, play_mode):
         self._play_mode = play_mode
