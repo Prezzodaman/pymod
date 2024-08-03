@@ -109,34 +109,10 @@ def write_wave_file(filepath, wave_file_data):
         wave_file.writeframesraw(bytearray(wave_file_data))
 
 
-# -- List of modules to test
-modules_list = [
-    'arpeggio', 'fineport', 'nosamp', 'port2', 'tremolo',
-    'delay', 'fx', 'offset', 'port3', 'vibwave',
-    'delay2', 'glissando', 'offsetweird', 'portfunny', 'vol',
-    'delaysim', 'line', 'pan', 'position', 'volslide',
-    'filter', 'loop', 'patdelay', 'pwm', 'volslide2',
-    'fine', 'loud', 'patloop2', 'simpy', 'volume2',
-    'fine2', 'nonexistence', 'port1', 'test', 'weirdthing',
-    'cuts', 'ode2ptk', 'wraparound', 'wraparound2', 'breaks',
-    'breaks2', 'volall', 'arptimings', 'timestretch', 'arpdesync',
-    'extended', 'portlimit', 'loopchange', 'loud2', 'loud3',
-    'basschan', 'loopchange2', 'delayfx', 'offsetness', 'reverse',
-    'offsetdelay'
-]
-
-
-# -- Tests
-@pytest.mark.parametrize("filename", modules_list)
-def test_render(filename, tmp_path):
+def _setup_module(module_info):
+    filename = module_info['filename']
     module_filepath = os.path.join(sys.path[0], 'tests', 'modules', f'{filename}.mod')
     assert os.path.exists(module_filepath)
-
-    wav_filename = filename + '.wav'
-    wav_filepath = os.path.join(sys.path[0], 'tests', 'wavs', wav_filename)
-    assert os.path.exists(wav_filepath)
-
-    temp_file = os.path.join(tmp_path, 'pymod-test-' + wav_filename)
 
     module = pymod.Module(module_filepath)
     assert module is not None
@@ -146,6 +122,45 @@ def test_render(filename, tmp_path):
 
     module.set_sample_rate(pymod.Module.render_test_sample_rate())
     module.set_play_mode('stereo_hard')
+    start_pos = module_info.get('start_pos')
+    if start_pos is not None:
+        module.set_start_pos(start_pos)
+    pattern_count = module_info.get('pattern_count')
+    if pattern_count is not None:
+        module.set_nb_of_patterns(pattern_count)
+    module.set_quiet(True)
+
+    return module
+
+
+# -- List of modules to test
+modules_list = [
+    {'filename': 'arpeggio'}, {'filename': 'fineport'}, {'filename': 'nosamp'}, {'filename': 'port2'}, {'filename': 'tremolo'},
+    {'filename': 'delay'}, {'filename': 'fx'}, {'filename': 'offset'}, {'filename': 'port3'}, {'filename': 'vibwave'},
+    {'filename': 'delay2'}, {'filename': 'glissando'}, {'filename': 'offsetweird'}, {'filename': 'portfunny'}, {'filename': 'vol'},
+    {'filename': 'delaysim'}, {'filename': 'line'}, {'filename': 'pan'}, {'filename': 'position'}, {'filename': 'volslide'},
+    {'filename': 'filter'}, {'filename': 'loop'}, {'filename': 'patdelay'}, {'filename': 'pwm'}, {'filename': 'volslide2'},
+    {'filename': 'fine'}, {'filename': 'loud'}, {'filename': 'patloop2'}, {'filename': 'simpy'}, {'filename': 'volume2'},
+    {'filename': 'fine2'}, {'filename': 'nonexistence'}, {'filename': 'port1'}, {'filename': 'test'}, {'filename': 'weirdthing'},
+    {'filename': 'cuts'}, {'filename': 'ode2ptk'}, {'filename': 'wraparound'}, {'filename': 'wraparound2'}, {'filename': 'breaks'},
+    {'filename': 'breaks2'}, {'filename': 'volall'}, {'filename': 'arptimings'}, {'filename': 'timestretch'}, {'filename': 'arpdesync'},
+    {'filename': 'extended'}, {'filename': 'portlimit'}, {'filename': 'loopchange'}, {'filename': 'loud2'}, {'filename': 'loud3'},
+    {'filename': 'basschan'}, {'filename': 'loopchange2'}, {'filename': 'delayfx'}, {'filename': 'offsetness'}, {'filename': 'reverse'},
+    {'filename': 'offsetdelay'}, {'filename': 'shaded_love', 'start_pos': 28, 'pattern_count': 1}
+]
+
+
+# -- Tests
+@pytest.mark.parametrize("module_info", modules_list)
+def test_render(module_info, tmp_path):
+    module = _setup_module(module_info)
+
+    filename = module_info['filename']
+    wav_filename = filename + '.wav'
+    wav_filepath = os.path.join(sys.path[0], 'tests', 'wavs', wav_filename)
+    assert os.path.exists(wav_filepath)
+
+    temp_file = os.path.join(tmp_path, 'pymod-test-' + wav_filename)
     module.render_to(temp_file)
 
     assert filecmp.cmp(wav_filepath, temp_file)
@@ -153,24 +168,15 @@ def test_render(filename, tmp_path):
     os.remove(temp_file)
 
 
-@pytest.mark.parametrize("filename", modules_list)
-def test_render_channels(filename, tmp_path):
-    module_filepath = os.path.join(sys.path[0], 'tests', 'modules', f'{filename}.mod')
-    assert os.path.exists(module_filepath)
+@pytest.mark.parametrize("module_info", modules_list)
+def test_render_channels(module_info, tmp_path):
+    module = _setup_module(module_info)
 
+    filename = module_info['filename']
     temp_file_prefix = os.path.join(tmp_path, f'pymod-test-{filename}')
     temp_file = temp_file_prefix + '_1.wav'
 
-    module = pymod.Module(module_filepath)
-    assert module is not None
-
-    # -- This makes sure the random offset value used in some effect matches the one for the test files we compare against
-    random.seed(pymod.Module.render_test_random_seed())
-
-    module.set_sample_rate(pymod.Module.render_test_sample_rate())
-    module.set_play_mode('stereo_hard')
-    module.set_quiet(True)
-    module.render_to(temp_file, True)
+    module.render_to(temp_file, separate_channels=True)
 
     # -- We mix all the resulting channels into one stereo file
     channel_data = []
@@ -202,3 +208,6 @@ def test_render_channels(filename, tmp_path):
     assert filecmp.cmp(wav_filepath, temp_file)
 
     os.remove(temp_file)
+    os.remove(temp_file_prefix + '_2.wav')
+    os.remove(temp_file_prefix + '_3.wav')
+    os.remove(temp_file_prefix + '_4.wav')
