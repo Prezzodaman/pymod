@@ -1,5 +1,5 @@
 # Pymod
-An Amiga module player/renderer written in Python! It uses PyAudio for real-time playback, so you'll need to install PortAudio for it to work (more information below). I've included a bunch of test modules that I made myself; they're free for anyone to use, for testing their players.
+An Amiga module player/renderer written in Python! It uses PyAudio for real-time playback, so you'll need to install PortAudio for it to work (more information below)
 
 ## Features
 * *It can play "Ode to ProTracker" and "Black Queen" perfectly the whole way through!!*

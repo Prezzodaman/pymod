@@ -1,7 +1,12 @@
 ## 1.1.2
+### General notes
+* Options have been added for playing sections of a module: "--startpos" is the position to start from, and "--patternscount" is the amount of orders to play from the specified position.
+
 ### Bug fixes
 * Fixed a bug where the initial playback of a sample alongside a note delay was at the wrong speed (fixes the vocal in H0ffman's "Professional Tracker")
 * Fixed a bug when playing a note before specifying a sample number, resulting in glitched noise
+* The tempo, ticks per line and number of loops are now reset properly after estimation
+* Sample numbers beyond 31 no longer result in a crash (fixes H0ffman's "Shaded Love")
 
 ## 1.1.1
 * Changed the package name, so Pymod can actually be installed for other users!

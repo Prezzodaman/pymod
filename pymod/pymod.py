@@ -548,6 +548,11 @@ class Module:
                 mod_samples[a].update({"offset": mod_pointer})
                 mod_pointer += mod_samples[a]["length"]
 
+            self._channels = mod_channels
+            self._pattern_amount = mod_pattern_amount  # setting these also, just in case they're needed later...
+            self._song_length = mod_song_length
+            self._name = mod_name
+
             if self._play_mode == "text":
                 print("Module text:")
                 print()

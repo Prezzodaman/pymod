@@ -180,22 +180,18 @@ def test_render_channels(module_info, tmp_path):
 
     # -- We mix all the resulting channels into one stereo file
     channel_data = []
-    channels = 0
 
-    # it would be nicer to have pymod return the number of channels, but i couldn't figure that out
-    for channel in range(1, 9):
-        if os.path.exists(f"{temp_file_prefix}_{channel}.wav"):
-            channel_data.append(read_wave_file(f"{temp_file_prefix}_{channel}.wav"))
-            channels += 1
+    for channel in range(1, module._channels + 1):
+        channel_data.append(read_wave_file(f"{temp_file_prefix}_{channel}.wav"))
     channel_length = get_nb_of_samples(channel_data[0])
 
     mixed_data = []
     for position in range(0, channel_length):
         mixed_left = 0
         mixed_right = 0
-        for channel in range(0, channels):
-            mixed_left += get_left_sample(channel_data[channel], position)
-            mixed_right += get_right_sample(channel_data[channel], position)
+        for channel in channel_data:
+            mixed_left += get_left_sample(channel, position)
+            mixed_right += get_right_sample(channel, position)
         write_sample(mixed_data, mixed_left, mixed_right)
 
     temp_file = temp_file_prefix + '.wav'
