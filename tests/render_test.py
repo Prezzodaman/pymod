@@ -134,6 +134,8 @@ def _setup_module(module_info):
 
 
 # -- List of modules to test
+# NOTE: starting a module from a specific pattern won't keep the previously set tempo (unless there happens to be a speed change) - should this be changed?
+
 modules_list = [
     {'filename': 'arpeggio'}, {'filename': 'fineport'}, {'filename': 'nosamp'}, {'filename': 'port2'}, {'filename': 'tremolo'},
     {'filename': 'delay'}, {'filename': 'fx'}, {'filename': 'offset'}, {'filename': 'port3'}, {'filename': 'vibwave'},
@@ -153,14 +155,25 @@ modules_list = [
 # -- Tests
 @pytest.mark.parametrize("module_info", modules_list)
 def test_render(module_info, tmp_path):
+    start_pos = 0
+    pattern_count = -1
+    if "start_pos" in module_info:
+        start_pos = module_info["start_pos"]
+    if "pattern_count" in module_info:
+        pattern_count = module_info["pattern_count"]
     module = _setup_module(module_info)
 
     filename = module_info['filename']
-    wav_filename = filename + '.wav'
-    wav_filepath = os.path.join(sys.path[0], 'tests', 'wavs', wav_filename)
+    if start_pos == 0:
+        wav_filepath = os.path.join(sys.path[0], 'tests', 'wavs', f'{filename}.wav')
+    else:
+        wav_filepath = os.path.join(sys.path[0], 'tests', 'wavs', f'{filename}_{start_pos}_{pattern_count}.wav')
     assert os.path.exists(wav_filepath)
 
-    temp_file = os.path.join(tmp_path, 'pymod-test-' + wav_filename)
+    if start_pos == 0:
+        temp_file = os.path.join(tmp_path, f'pymod-test-{filename}.wav')
+    else:
+        temp_file = os.path.join(tmp_path, f'pymod-test-{filename}-{start_pos}-{pattern_count}.wav')
     module.render_to(temp_file)
 
     assert filecmp.cmp(wav_filepath, temp_file)
@@ -170,10 +183,19 @@ def test_render(module_info, tmp_path):
 
 @pytest.mark.parametrize("module_info", modules_list)
 def test_render_channels(module_info, tmp_path):
+    start_pos = 0
+    pattern_count = -1
+    if "start_pos" in module_info:
+        start_pos = module_info["start_pos"]
+    if "pattern_count" in module_info:
+        pattern_count = module_info["pattern_count"]
     module = _setup_module(module_info)
 
     filename = module_info['filename']
-    temp_file_prefix = os.path.join(tmp_path, f'pymod-test-{filename}')
+    if start_pos == 0:
+        temp_file_prefix = os.path.join(tmp_path, f'pymod-test-{filename}')
+    else:
+        temp_file_prefix = os.path.join(tmp_path, f'pymod-test-{filename}-{start_pos}-{pattern_count}')
     temp_file = temp_file_prefix + '_1.wav'
 
     module.render_to(temp_file, separate_channels=True)
@@ -181,8 +203,8 @@ def test_render_channels(module_info, tmp_path):
     # -- We mix all the resulting channels into one stereo file
     channel_data = []
 
-    for channel in range(1, module._channels + 1):
-        channel_data.append(read_wave_file(f"{temp_file_prefix}_{channel}.wav"))
+    for channel in range(0, module._channels):
+        channel_data.append(read_wave_file(f"{temp_file_prefix}_{channel + 1}.wav"))
     channel_length = get_nb_of_samples(channel_data[0])
 
     mixed_data = []
@@ -197,13 +219,14 @@ def test_render_channels(module_info, tmp_path):
     temp_file = temp_file_prefix + '.wav'
     write_wave_file(temp_file, mixed_data)
 
-    wav_filepath = os.path.join(sys.path[0], 'tests', 'wavs', f'{filename}.wav')
+    if start_pos == 0:
+        wav_filepath = os.path.join(sys.path[0], 'tests', 'wavs', f'{filename}.wav')
+    else:
+        wav_filepath = os.path.join(sys.path[0], 'tests', 'wavs', f'{filename}_{start_pos}_{pattern_count}.wav')
     assert os.path.exists(wav_filepath)
 
     # -- Mixed and generated version should match
     assert filecmp.cmp(wav_filepath, temp_file)
 
-    os.remove(temp_file)
-    os.remove(temp_file_prefix + '_2.wav')
-    os.remove(temp_file_prefix + '_3.wav')
-    os.remove(temp_file_prefix + '_4.wav')
+    for channel in range(0, module._channels):
+        os.remove(temp_file_prefix + f"_{channel + 1}.wav")

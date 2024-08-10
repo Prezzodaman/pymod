@@ -1,5 +1,5 @@
 # Pymod
-An Amiga module player/renderer written in Python! It uses PyAudio for real-time playback, so you'll need to install PortAudio for it to work (more information below)
+An Amiga module player/renderer written in Python! It uses PyAudio for real-time playback, so you'll need to install PortAudio for it to work (more information below). Accuracy is the main focus here, not speed - that will come later...
 
 ## Features
 * *It can play "Ode to ProTracker" and "Black Queen" perfectly the whole way through!!*
@@ -67,6 +67,8 @@ pymod <options> <path to .mod file> <play mode>
 	* `--quiet (-q)` : Shows absolutely no info while playing/rendering a module.
 	* `--amplify <factor> (-a)` : Amplifies the output volume by a certain factor, useful for modules with lots of channels. 1 is normal volume, 2 is double volume, 0.5 is half volume, etc.
 	* `--interpolate (-i)` : Use linear interpolation when playing back samples, resulting in a smoother, cleaner sound.
+	* `--startpos` : Start playing the module from a specific order position.
+	* `--patternscount` : The amount of patterns to play in total.
 
 Pymod can also be imported into your Python programs and used as a module:
 
@@ -101,8 +103,10 @@ The `Module` instance also has these methods:
 - `set_quiet(<flag>)` : If true, this shows absolutely no info while playing/rendering a module.
 - `set_amplify(<factor>)` : Amplifies the output volume by a certain factor.
 - `set_interpolate(<flag>)` : If true, this uses linear interpolation when playing back samples.
+- `set_start_pos(<position>)` : Plays the module from a specific order position.
+- `set_nb_of_patterns(<nb_of_patterns>)` : The amount of patterns to play in total.
 
-By default, the sample rate is 44100 Hz and the play mode is mono. These can be changed on init by specifying the optional arguments `sample_rate` and `play_mode`. `verbose`, `legacy`, `quiet`, `amplify` and `interpolate` can also be specified as arguments.
+By default, the sample rate is 44100 Hz and the play mode is mono. These can be changed on init by specifying the optional arguments `sample_rate` and `play_mode`. `verbose`, `legacy`, `quiet`, `amplify`, `interpolate`, `start_pos` and `nb_of_patterns` can also be specified as arguments.
 
 ## Unit testing
 Unit tests can be run by using `pytest`. These tests run against a set of pre-generated wav files to make sure that the output is consistent across changes.
@@ -173,5 +177,5 @@ Note: in legacy mode, these will do nothing!
 * **ModArchive.org** - For being an invaluable resource to the tracking community
 * **FireLight** - For creating "fmoddoc2.zip", the best source of information for writing module players!
 * **Warren Willmey** - For documenting some overlooked ProTracker quirks for Weasel Audio Library, and making some very useful test modules
-* **Didier Malenfant** - For helping generously and doing the unthinkable: helping turn Pymod into a useable module! (no, not that kind)
+* **Didier Malenfant** - For helping generously and doing the unthinkable: helping turn Pymod into a useable module (no, not that kind). Also for finding and fixing bugs and oversights!
 * **The tracking community** - For being so creative :)

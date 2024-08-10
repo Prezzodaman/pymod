@@ -1,3 +1,8 @@
+## 1.1.3
+### General notes
+* Sample rate for unit testing has been lowered, resulting in a significant speed increase
+	* It's also possible to test certain sections of a module
+
 ## 1.1.2
 ### General notes
 * Options have been added for playing sections of a module: "--startpos" is the position to start from, and "--patternscount" is the amount of orders to play from the specified position.
@@ -23,7 +28,7 @@
 * Added a quiet mode that gives no feedback when rendering (useful for batch renders)
 * Simplified the way channels are rendered individually
 * Prevented file rendering to an extension other than .wav
-* Added support for ProTracker modules with more than 64 patterns (see test module "howmanypatterns.mod")
+* Added support for ProTracker modules with more than 65 patterns (see test module "howmanypatterns.mod")
     * Order length is still limited to 128 patterns, but that's a constraint within ProTracker itself (longer orders are still technically possible)
 * Added a "legacy" mode that simulates ProTracker 2.3's quirks
 * Added an extended period table featuring 2 extra octaves, nabbed from TakeTracker (used by default)
@@ -90,9 +95,8 @@ The quirks mentioned below are only affected in legacy mode, otherwise, they beh
 ### To do
 * Perhaps figure out a way of rendering only a few samples (small buffer size) at a time, allowing for real-time playback to be used alongside other Python code
 * Figure out unit testing for legacy mode
-* Fix sample swapping with LOOPED samples
 
-## 1.0.1:
+## 1.0.1
 ### Bug fixes
 * Partially fixed an offset issue with "ode2ptk.mod" when rendering individual channels
 * Kept the volume identical when rendering individual channels

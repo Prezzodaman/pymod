@@ -269,6 +269,12 @@ class Module:
             return
 
         test_modules = os.listdir(modules_folder)
+
+        module_sections = {}
+        for filename in test_modules:
+            module_sections.update({filename: []})
+        module_sections["shaded_love.mod"].append({"start_pos": 28, "pattern_count": 1})
+
         for number, filename in enumerate(test_modules):
             module_file_path = os.path.join(modules_folder, filename)
             if not os.path.isfile(module_file_path) or not os.path.splitext(filename)[1] == ".mod":
@@ -284,10 +290,19 @@ class Module:
             module.set_sample_rate(Module.render_test_sample_rate())
             module.set_play_mode("stereo_hard")
             module.set_quiet(True)
-
+            # TODO: find a way of storing all necessary test modules and their parameters in a single file... right now the module start/length have to be updated in both this file and "tests/render_test.py"
             base_name = os.path.basename(module_file_path)
-            print(f"{number + 1}/{len(test_modules)}: Rendering {base_name}...")
-            module.render_to(os.path.join(wavs_folder, os.path.splitext(filename)[0] + ".wav"))
+            if len(module_sections[filename]) == 0:  # no need to render the whole file if only a section's going to be tested
+                print(f"{number + 1}/{len(test_modules)}: {base_name}")
+                module.render_to(os.path.join(wavs_folder, os.path.splitext(filename)[0] + ".wav"))
+            else:
+                for section in module_sections[filename]:
+                    start_pos = section["start_pos"]
+                    pattern_count = section["pattern_count"]
+                    print(f"{number + 1}/{len(test_modules)}: {base_name} (orders {start_pos}-{start_pos + (pattern_count - 1)})")
+                    module.set_start_pos(start_pos)
+                    module.set_nb_of_patterns(pattern_count)
+                    module.render_to(os.path.join(wavs_folder, os.path.splitext(filename)[0] + f"_{start_pos}_{pattern_count}.wav"))
 
     @classmethod
     def _mod_get_frequency(cls, period):
@@ -365,7 +380,7 @@ class Module:
 
     @classmethod
     def render_test_sample_rate(cls):
-        return 22050
+        return 8000
 
     @classmethod
     def render_test_random_seed(cls):
@@ -376,7 +391,7 @@ class Module:
         return 44100
 
     # -- Instance Methods
-    def __init__(self, input_file_path, sample_rate=0, play_mode="mono", verbose=False, quiet=False, legacy=False, amplify=1, interpolate=False):
+    def __init__(self, input_file_path, sample_rate=0, play_mode="mono", verbose=False, quiet=False, legacy=False, amplify=1, interpolate=False, start_pos=0, nb_of_patterns=-1):
         """Constructor based on command line arguments."""
 
         # these are set based on the keyword arguments, when initializing a Module object
@@ -391,6 +406,8 @@ class Module:
         self._legacy = legacy
         self._amplify = amplify
         self._interpolate = interpolate
+        self._mod_position_start = start_pos
+        self._nb_of_patterns_to_play = nb_of_patterns
 
         # these are just defaults
         self._render_file = None
@@ -399,8 +416,6 @@ class Module:
         self._buffer_size = Module.buffer_size_default()
         self._mod_tempo = 125
         self._mod_ticks = 6
-        self._mod_position_start = 0
-        self._nb_of_patterns_to_play = -1
 
     # https://modarchive.org/forums/index.php?topic=2709.0
     def _mod_get_tempo_length(self, mod_tempo):
