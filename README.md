@@ -1,5 +1,5 @@
 # Pymod
-**Notice:** Development of Pymod has been halted for the time being. The code is absolute spaghetti, and it's in dire need of a restructure, and as such I've lost interest working on it. If anyone's willing to contribute then it's much appreciated, but Pymod isn't my main focus anymore. Thanks for understanding!
+**Notice:** Development of Pymod has stopped! Although I appreciate the help of turning it into a library, it only started off as a little passion project, and it went far beyond what I intended. As such, I've lost interest working on it anymore. Thanks for understanding!
 
 An Amiga module player/renderer written in Python! It uses PyAudio for real-time playback, so you'll need to install PortAudio for it to work (more information below). Accuracy is the main focus here, not speed - that will come later...
 
